@@ -125,6 +125,10 @@
 
                 // Other places to broaden/fix the regex include...
 
+                var orTemplate = function ( stringMatch ) {
+                    return "(" + stringMatch + "|\\{\\{.+?\\}\\})";
+                };
+
                 // ...possible whitespace around the namespace
                 LINK_RE = /\\\[\\\[(.+?\:.+?)(?:\\\|.+?)?\\\]\\\]/g;
                 finalRegex = finalRegex.replace( LINK_RE,
@@ -139,10 +143,13 @@
 
                 // ...abbreviations
                 ABBR = /<abbr.+?<\\\/abbr>/;
-                finalRegex = finalRegex.replace( ABBR,
-                        function ( stringMatch ) {
-                            return "(" + stringMatch + "|\\{\\{.+?\\}\\})";
-                        } );
+                finalRegex = finalRegex.replace( ABBR, orTemplate );
+
+                // ...code
+                CODE = /<code>.+?<\\\/code>/;
+                finalRegex = finalRegex.replace( CODE, function ( stringMatch ) {
+                    return "(" + stringMatch + "|\\{\\{.+?\\}\\}|<code>\\{\\{.+?\\}\\}<\\/code>)";
+                } );
 
                 // ...the small tag
                 SMALL = /<small>.+?<\\\/small>/;
