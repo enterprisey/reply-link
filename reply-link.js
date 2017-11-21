@@ -33,16 +33,19 @@
     }
 
     /**
-     * Given a text node at the end of a comment, return a Deferred that
-     * resolves with a regular expression string (not an object) that
-     * can be used to match the wikitext of the comment.
+     * Given a text node at the end of a comment, create a regular
+     * expression string (not an object) that can be used to match the
+     * wikitext of the comment.
      *
      * Why? Because the script's way of responding to a comment is to
      * find its index in the wikitext, then splice our response in at
      * that point. It's essential that our regex be as precise as
      * possible to avoid responding to the wrong comment.
+     *
+     * callback is a function that is called once the regex is ready
+     * with the regex string as the first argument.
      */
-    function getCmtWikitextRegex( finalTextNode ) {
+    function getCmtWikitextRegex( finalTextNode, callback ) {
 
         // Loop through siblings and accumulate HTML
         var siblings = iterableToList( finalTextNode.parentNode.childNodes );
@@ -112,61 +115,59 @@
         xhr.open( "POST", PARSOID_ENDPOINT );
 
         // The POST request is async, so this function must be as well
-        return new Promise( function ( resolve ) {
-            xhr.addEventListener( "load", function () {
-                var wikitext = xhr.responseText;
-                var finalRegex = escapeForRegex( wikitext );
+        xhr.addEventListener( "load", function () {
+            var wikitext = xhr.responseText;
+            var finalRegex = escapeForRegex( wikitext );
 
-                // Do wikitext replacements
-                for( var key in selfLinkWikitextReplacements ) {
-                    finalRegex = finalRegex.replace( key, selfLinkWikitextReplacements[ key ] );
-                }
-                console.log(finalRegex);
+            // Do wikitext replacements
+            for( var key in selfLinkWikitextReplacements ) {
+                finalRegex = finalRegex.replace( key, selfLinkWikitextReplacements[ key ] );
+            }
+            console.log(finalRegex);
 
-                // Other places to broaden/fix the regex include...
+            // Other places to broaden/fix the regex include...
 
-                var orTemplate = function ( stringMatch ) {
-                    return "(" + stringMatch + "|\\{\\{.+?\\}\\})";
-                };
+            var orTemplate = function ( stringMatch ) {
+                return "(" + stringMatch + "|\\{\\{.+?\\}\\})";
+            };
 
-                // ...possible whitespace around the namespace
-                LINK_RE = /\\\[\\\[(.+?\:.+?)(?:\\\|.+?)?\\\]\\\]/g;
-                finalRegex = finalRegex.replace( LINK_RE,
-                        function ( string_match ) {
-                            console.log(string_match);
-                            LINK_RE.lastIndex = 0;
-                            var match = LINK_RE.exec( string_match );
-                            console.log(match);
-                            return match[0].replace( match[1],
-                                    match[1].replace( ":", "\\s*:\\s*" ) );
-                        } );
+            // ...possible whitespace around the namespace
+            LINK_RE = /\\\[\\\[(.+?\:.+?)(?:\\\|.+?)?\\\]\\\]/g;
+            finalRegex = finalRegex.replace( LINK_RE,
+                    function ( string_match ) {
+                        console.log(string_match);
+                        LINK_RE.lastIndex = 0;
+                        var match = LINK_RE.exec( string_match );
+                        console.log(match);
+                        return match[0].replace( match[1],
+                                match[1].replace( ":", "\\s*:\\s*" ) );
+                    } );
 
-                // ...abbreviations
-                ABBR = /<abbr.+?<\\\/abbr>/;
-                finalRegex = finalRegex.replace( ABBR, orTemplate );
+            // ...abbreviations
+            ABBR = /<abbr.+?<\\\/abbr>/;
+            finalRegex = finalRegex.replace( ABBR, orTemplate );
 
-                // ...code
-                CODE = /<code>.+?<\\\/code>/;
-                finalRegex = finalRegex.replace( CODE, function ( stringMatch ) {
-                    return "(" + stringMatch + "|\\{\\{.+?\\}\\}|<code>\\{\\{.+?\\}\\}<\\/code>)";
-                } );
-
-                // ...the small tag
-                SMALL = /<small>.+?<\\\/small>/;
-                finalRegex = finalRegex.replace( SMALL,
-                        function ( stringMatch ) {
-                            var innerText = stringMatch.replace("<small>", "")
-                                .replace("<\\/small>", "");
-                            return "(" + stringMatch +
-                                "|\\{\\{\\s*small\\s*\\|\\s*" + innerText +
-                                "\\s*\\}\\})";
-                        } );
-
-
-                resolve( finalRegex );
+            // ...code
+            CODE = /<code>.+?<\\\/code>/;
+            finalRegex = finalRegex.replace( CODE, function ( stringMatch ) {
+                return "(" + stringMatch + "|\\{\\{.+?\\}\\}|<code>\\{\\{.+?\\}\\}<\\/code>)";
             } );
-            xhr.send( formData );
+
+            // ...the small tag
+            SMALL = /<small>.+?<\\\/small>/;
+            finalRegex = finalRegex.replace( SMALL,
+                    function ( stringMatch ) {
+                        var innerText = stringMatch.replace("<small>", "")
+                            .replace("<\\/small>", "");
+                        return "(" + stringMatch +
+                            "|\\{\\{\\s*small\\s*\\|\\s*" + innerText +
+                            "\\s*\\}\\})";
+                    } );
+
+
+            callback( finalRegex );
         } );
+        xhr.send( formData );
     }
 
     /**
@@ -356,8 +357,18 @@
                 prevPanel.remove();
             }
 
-            // Disable this link
-            newLink.textContent = "replying";
+            // Handle disable action
+            if( newLink.textContent === "reply" ) {
+
+                // Disable this link
+                newLink.textContent = "cancel";
+            } else {
+
+                // We've already cancelled the reply
+                newLink.textContent = "reply";
+                evt.preventDefault();
+                return false;
+            }
 
             // Create panel
             var panelEl = document.createElement( "div" );
@@ -371,7 +382,7 @@
             document.getElementById( "reply-dialog-field" ).style = "padding: 0.625em; min-height: 10em; margin-bottom: 0.75em;";
 
             // Button event listener (we have to get context first)
-            getCmtWikitextRegex( node ).then( function ( regex ) {
+            getCmtWikitextRegex( node, function ( regex ) {
                 document.getElementById( "reply-dialog-button" )
                     .addEventListener( "click", function () {
                         doReply( regex, indentation, header );
@@ -473,7 +484,7 @@
     var currNamespace = mw.config.get( "wgNamespaceNumber" );
     if ( currNamespace % 2 === 1 || currNamespace === 4 ) {
         mw.loader.load( "mediawiki.ui.input", "text/css" );
-        mw.loader.using( "mediawiki.util" ).then( function () {
+        mw.loader.using( [ "mediawiki.util", "user.tokens" ] ).then( function () {
             $( document ).ready( onReady );
         } );
     }
