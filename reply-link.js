@@ -405,11 +405,17 @@
                 prevPanel.remove();
             }
 
+            // Reset previous cancel links
+            iterableToList( document.querySelectorAll(
+                        ".reply-dialog-wrapper a" ) ).forEach( function ( el ) {
+                if( el != newLink ) el.textContent = "reply";
+            } );
+
             // Handle disable action
             if( newLink.textContent === "reply" ) {
 
                 // Disable this link
-                newLink.textContent = "cancel";
+                newLink.textContent = "cancel reply";
             } else {
 
                 // We've already cancelled the reply
