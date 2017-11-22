@@ -161,6 +161,10 @@
                             "\\s*\\}\\})";
                     } );
 
+            // ...spans with particular classes
+            var SPAN = /<span class="template\\-ping">.+?<\\\/span>/;
+            finalRegex = finalRegex.replace( SPAN, orTemplate );
+
 
             callback( finalRegex );
         } );
@@ -265,36 +269,57 @@
                 // Now, loop through all the comments replying to that
                 // one and place our reply after the last one
                 var slicedSecWikitext = sectionWikitext.slice( ctxIndex );
-                var prevIndentLevel = indentation.length;
-                console.log("TARGET: " + prevIndentLevel);
                 var candidateLines = slicedSecWikitext.split( "\n" );
-                var currIndentation, currIndentationLvl;
-                var replyLine = -1; // next line number in sectionWikitext after reply
-                for( var i = 0; i < candidateLines.length; i++ ) {
-                    if( candidateLines[i].trim() === "" ) continue;
-                    currIndentation = /^[:\*]+/.exec( candidateLines[i] );
-                    currIndentationLvl = currIndentation ? currIndentation[0].length : 0;
-                    console.log(">" + candidateLines[i] + "< => " + currIndentationLvl);
-                    if( currIndentationLvl <= prevIndentLevel ) {
-                        break;
-                    } else {
-                        replyLine = i;
+                var replyLine = -2; // line number in sectionWikitext before reply
+                if( slicedSecWikitext.trim().length > 0 ) {
+                    var prevIndentLevel = indentation.length;
+                    console.log("TARGET: " + prevIndentLevel);
+                    var currIndentation, currIndentationLvl;
+                    console.log("<<" + slicedSecWikitext.trim() + ">>" );
+                    for( var i = 0; i < candidateLines.length; i++ ) {
+                        if( candidateLines[i].trim() === "" ) { console.log("hark a skip");continue; }
+                        currIndentation = /^[:\*]+/.exec( candidateLines[i] );
+                        currIndentationLvl = currIndentation ? currIndentation[0].length : 0;
+                        console.log(">" + candidateLines[i] + "< => " + currIndentationLvl);
+                        if( currIndentationLvl <= prevIndentLevel ) {
+                            console.log("i is " + i );
+                            if( i === 0 ) replyLine = -1;
+                            break;
+                        } else {
+                            replyLine = i;
+                        }
                     }
+                    console.log(replyLine);
+
+                    if( replyLine < -1 ) {
+                        replyLine = candidateLines.length - 1;
+                    }
+                } else {
+
+                    // In this case, we may be replying to the last comment in a section
+                    replyLine = -1;
                 }
 
-                if( replyLine < 0 ) {
-                    replyLine = candidateLines.length;
-                }
+                console.log("("+replyLine+") >>" + candidateLines[replyLine] + "<<");
 
                 // Splice into slicedSecWikitext
                 slicedSecWikitext = candidateLines
                     .slice( 0, replyLine + 1 )
-                    .concat( [ fullReply ], candidateLines.slice( replyLine + 1) )
+                    .concat( [ fullReply ], candidateLines.slice( replyLine + 1 ) )
                     .join( "\n" );
+
+                // Remove extra newlines
+                if( /\n\n\n+$/.test( slicedSecWikitext ) ) {
+                    slicedSecWikitext = slicedSecWikitext.trim() + "\n\n";
+                }
+
+                // We may need an additional newline if the two slices don't have any
+                var optionalNewline = ( !sectionWikitext.slice( 0, ctxIndex ).endsWith( "\n" ) &&
+                            !slicedSecWikitext.startsWith( "\n" ) ) ? "\n" : "";
 
                 // Splice into sectionWikitext
                 sectionWikitext = sectionWikitext.slice( 0, ctxIndex ) +
-                    slicedSecWikitext;
+                    optionalNewline + slicedSecWikitext;
 
                 // Correct indices of nbsp entities after reply
                 // insertion point
@@ -309,6 +334,9 @@
                     sectionWikitext = sectionWikitext.slice( 0, entityIdxList[i] ) +
                         "&nbsp;" + sectionWikitext.slice( entityIdxList[i] + 1 );
                 }
+
+                //console.log(sectionWikitext);
+                //return;
 
                 var newWikitext = wikitext.replace( oldSectionWikitext,
                         sectionWikitext );
