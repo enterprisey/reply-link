@@ -123,7 +123,6 @@
             for( var key in selfLinkWikitextReplacements ) {
                 finalRegex = finalRegex.replace( key, selfLinkWikitextReplacements[ key ] );
             }
-            console.log(finalRegex);
 
             // Other places to broaden/fix the regex include...
 
@@ -135,10 +134,8 @@
             LINK_RE = /\\\[\\\[(.+?\:.+?)(?:\\\|.+?)?\\\]\\\]/g;
             finalRegex = finalRegex.replace( LINK_RE,
                     function ( string_match ) {
-                        console.log(string_match);
                         LINK_RE.lastIndex = 0;
                         var match = LINK_RE.exec( string_match );
-                        console.log(match);
                         return match[0].replace( match[1],
                                 match[1].replace( ":", "\\s*:\\s*" ) );
                     } );
@@ -303,27 +300,23 @@
 
                 // Send another request, this time to actually edit the
                 // page
-                $.ajax( {
-                    url: mw.util.wikiScript( "api" ),
-                    type: "POST",
-                    dataType: "json",
-                    data: {
-                        format: "json",
-                        action: "edit",
-                        title: mw.config.get( "wgPageName" ),
-                        summary: summary,
-                        token: mw.user.tokens.get( "editToken" ),
-                        text: newWikitext
-                    }
+                ( new mw.Api() ).postWithToken( "csrf", {
+                    action: "edit",
+                    title: mw.config.get( "wgPageName" ),
+                    summary: summary,
+                    text: newWikitext
                 } ).done ( function ( data ) {
                     if ( data && data.edit && data.edit.result && data.edit.result == "Success" ) {
                         setStatus( "Reply saved! (<a href='javascript:window.location.reload(true)' class='reload'>Reload</a>)" );
                     } else {
                         setStatus( "While saving, the edit query returned an error. =(" );
                     }
+                    console.log(data);
                     document.getElementById( "reply-dialog-field" ).className.replace( " reply-dialog-pending", "" );
-                } ).fail ( function() {
+                } ).fail ( function( code, result ) {
                     setStatus( "While saving, the AJAX request failed." );
+                    console.log(code);
+                    console.log(result);
                 } );
             } catch ( e ) {
                 setStatus( "While getting the wikitext, there was an error." );
@@ -484,7 +477,7 @@
     var currNamespace = mw.config.get( "wgNamespaceNumber" );
     if ( currNamespace % 2 === 1 || currNamespace === 4 ) {
         mw.loader.load( "mediawiki.ui.input", "text/css" );
-        mw.loader.using( [ "mediawiki.util", "user.tokens" ] ).then( function () {
+        mw.loader.using( [ "mediawiki.util", "mediawiki.api.edit" ] ).then( function () {
             $( document ).ready( onReady );
         } );
     }
