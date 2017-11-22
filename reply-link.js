@@ -131,7 +131,7 @@
             };
 
             // ...possible whitespace around the namespace
-            LINK_RE = /\\\[\\\[(.+?\:.+?)(?:\\\|.+?)?\\\]\\\]/g;
+            var LINK_RE = /\\\[\\\[(.+?\:.+?)(?:\\\|.+?)?\\\]\\\]/g;
             finalRegex = finalRegex.replace( LINK_RE,
                     function ( string_match ) {
                         LINK_RE.lastIndex = 0;
@@ -141,17 +141,17 @@
                     } );
 
             // ...abbreviations
-            ABBR = /<abbr.+?<\\\/abbr>/;
+            var ABBR = /<abbr.+?<\\\/abbr>/;
             finalRegex = finalRegex.replace( ABBR, orTemplate );
 
             // ...code
-            CODE = /<code>.+?<\\\/code>/;
+            var CODE = /<code>.+?<\\\/code>/;
             finalRegex = finalRegex.replace( CODE, function ( stringMatch ) {
                 return "(" + stringMatch + "|\\{\\{.+?\\}\\}|<code>\\{\\{.+?\\}\\}<\\/code>)";
             } );
 
             // ...the small tag
-            SMALL = /<small>.+?<\\\/small>/;
+            var SMALL = /<small>.+?<\\\/small>/;
             finalRegex = finalRegex.replace( SMALL,
                     function ( stringMatch ) {
                         var innerText = stringMatch.replace("<small>", "")
@@ -234,7 +234,7 @@
                 // in a dictionary to be readded
                 var entityIdxList = [];
                 var entityIdx;
-                while( true ) {
+                for( ;; ) {
                     entityIdx = sectionWikitext.lastIndexOf( "&nbsp;" );
                     if( entityIdx < 0 ) break;
 
@@ -247,8 +247,6 @@
                 console.log(sectionWikitext);
                 console.log(contextRegex);
 
-                //var fakeContextRegex = contextRegex.replace( new RegExp( "\\\\", "g" ), "" ).replace( /s\*/g, "" );
-
                 // Replace non-breaking spaces (the rendered version)
                 // with regular spaces
                 contextRegex = contextRegex.replace( /[\s\u00A0]/g, function ( m ) {
@@ -259,30 +257,50 @@
                     }
                 } );
                 var ctxMatch = ( new RegExp( contextRegex, "g" ) ).exec( sectionWikitext );
-                //console.log(sectionWikitext.indexOf(fakeContextRegex));
-                //console.log(indexOf(sectionWikitext,fakeContextRegex));
                 console.log(ctxMatch);
 
-                // Splice fullReply into sectionWikitext
+                // ctxIndex is the index right after the comment we're replying to
                 var ctxIndex = ctxMatch.index + ctxMatch[0].length;
-                var firstHalf = sectionWikitext.slice( 0, ctxIndex );
-                if( !firstHalf.endsWith( "\n" ) ) {
-                    fullReply = "\n" + fullReply;
-                }
-                //console.log("A--");
-                //console.log(firstHalf);
-                //console.log("B--");
-                //console.log(fullReply);
-                //console.log("C--");
-                //console.log(sectionWikitext.slice(ctxIndex));
-                //console.log("D--");
 
-                sectionWikitext = firstHalf + fullReply + sectionWikitext.slice( ctxIndex );
+                // Now, loop through all the comments replying to that
+                // one and place our reply after the last one
+                var slicedSecWikitext = sectionWikitext.slice( ctxIndex );
+                var prevIndentLevel = indentation.length;
+                console.log("TARGET: " + prevIndentLevel);
+                var candidateLines = slicedSecWikitext.split( "\n" );
+                var currIndentation, currIndentationLvl;
+                var replyLine = -1; // next line number in sectionWikitext after reply
+                for( var i = 0; i < candidateLines.length; i++ ) {
+                    if( candidateLines[i].trim() === "" ) continue;
+                    currIndentation = /^[:\*]+/.exec( candidateLines[i] );
+                    currIndentationLvl = currIndentation ? currIndentation[0].length : 0;
+                    console.log(">" + candidateLines[i] + "< => " + currIndentationLvl);
+                    if( currIndentationLvl <= prevIndentLevel ) {
+                        break;
+                    } else {
+                        replyLine = i;
+                    }
+                }
+
+                if( replyLine < 0 ) {
+                    replyLine = candidateLines.length;
+                }
+
+                // Splice into slicedSecWikitext
+                slicedSecWikitext = candidateLines
+                    .slice( 0, replyLine + 1 )
+                    .concat( [ fullReply ], candidateLines.slice( replyLine + 1) )
+                    .join( "\n" );
+
+                // Splice into sectionWikitext
+                sectionWikitext = sectionWikitext.slice( 0, ctxIndex ) +
+                    slicedSecWikitext;
 
                 // Correct indices of nbsp entities after reply
                 // insertion point
+                var replyIdx = sectionWikitext.indexOf( fullReply );
                 entityIdxList = entityIdxList.map( function ( idx ) {
-                    return ( idx >= ctxIndex ) ? idx + fullReply.length : idx;
+                    return ( idx >= replyIdx ) ? idx + fullReply.length + 1 : idx;
                 } );
 
                 // Put entities back
