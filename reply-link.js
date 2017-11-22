@@ -203,7 +203,10 @@
 
                 // Generate reply in wikitext form
                 var reply = document.getElementById( "reply-dialog-field" ).value;
-                var fullReply = indentation + ":" + reply + " ~~~~";
+                var fullReply = reply.split( "\n" ).map( function ( line ) {
+                    return indentation + ":" + line;
+                } ).join( "\n" );
+                fullReply += " ~~~~";
 
                 // Extract wikitext of just the section
                 var HEADER_RE = /==(=*)\s*(.+?)\s*\1==/g;
@@ -283,7 +286,9 @@
                         console.log(">" + candidateLines[i] + "< => " + currIndentationLvl);
                         if( currIndentationLvl <= prevIndentLevel ) {
                             console.log("i is " + i );
-                            if( i === 0 ) replyLine = -1;
+                            var onlyBlanksSoFar = candidateLines.slice( 0, i )
+                                .every( function ( line ) { return line.trim() === ""; } );
+                            if( i === 0 || onlyBlanksSoFar ) replyLine = -1;
                             break;
                         } else {
                             replyLine = i;
@@ -294,13 +299,17 @@
                     if( replyLine < -1 ) {
                         replyLine = candidateLines.length - 1;
                     }
+
+                    if( replyLine >= 0 ) {
+                        while( candidateLines[replyLine].trim() === "" ) replyLine--;
+                    }
                 } else {
 
                     // In this case, we may be replying to the last comment in a section
                     replyLine = -1;
                 }
 
-                console.log("("+replyLine+") >>" + candidateLines[replyLine] + "<<");
+                if(replyLine>=0)console.log("("+replyLine+") >>" + candidateLines[replyLine] + "<<");
 
                 // Splice into slicedSecWikitext
                 slicedSecWikitext = candidateLines
@@ -325,7 +334,7 @@
                 // insertion point
                 var replyIdx = sectionWikitext.indexOf( fullReply );
                 entityIdxList = entityIdxList.map( function ( idx ) {
-                    return ( idx >= replyIdx ) ? idx + fullReply.length + 1 : idx;
+                    return ( idx >= replyIdx ) ? idx + fullReply.length + 2 : idx;
                 } );
 
                 // Put entities back
