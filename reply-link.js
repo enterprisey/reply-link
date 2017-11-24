@@ -63,6 +63,9 @@
         // Our strategy: replace each mistake in the HTML with a unique
         // key, send the HTML through Parsoid, and do the reverse
         // replacement before we return the wikitext.
+        //
+        // NOTE! The regexes have to have the "g" flag to avoid an
+        // infinite loop.
         var mistakes = [
             [
                 "SELFLINK", /<a class="mw-selflink selflink">(.+)<\/a>/g,
@@ -81,6 +84,19 @@
                         return "\\[\\[" + match[1] + "\\s*\\|\\s*" + match[2] +
                         "\\]\\]";
                     }
+                }
+            ], [
+                "NOWIKI_BR",
+                /(<br\s*\/?\s*>)([^\n])/g,
+                function ( match ) {
+                    return "<nowiki>\\s*" + match[1] + "\\s*</nowiki>" +
+                        match[2];
+                }
+            ], [
+                "REGULAR_BR",
+                /(<br\s*\/?\s*>)\n/g,
+                function ( match ) {
+                    return "\\s*<\\s*br\\s*/?\\s*>\\s*\\n?\\s*";
                 }
             ]
         ];
