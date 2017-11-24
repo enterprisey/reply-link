@@ -98,6 +98,13 @@
                 function ( match ) {
                     return "\\s*<\\s*br\\s*/?\\s*>\\s*\\n?\\s*";
                 }
+            ], [
+                "TL_TEMPLATE",
+                /\{\{<a href="\/wiki\/Template:.+?>(.+?)<\/a>.*?\}\}/g,
+                function ( match ) {
+                    return "\\{\\{\\s*tl\\s*\\|\\s*" + match[1] +
+                        "\\s*\\.*?\\}\\}";
+                }
             ]
         ];
 
