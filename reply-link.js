@@ -562,7 +562,7 @@
     if ( currNamespace % 2 === 1 || currNamespace === 4 ) {
         mw.loader.load( "mediawiki.ui.input", "text/css" );
         mw.loader.using( [ "mediawiki.util", "mediawiki.api.edit" ] ).then( function () {
-            $( document ).ready( onReady );
+            mw.hook( "wikipage.content" ).add( onReady );
         } );
     }
 }( jQuery, mediaWiki ) );
