@@ -229,7 +229,7 @@
                 var fullReply = reply.split( "\n" ).map( function ( line ) {
                     return indentation + ":" + line;
                 } ).join( "\n" );
-                fullReply += " ~~~~";
+                fullReply += " ~~" + "~~";
 
                 // Extract wikitext of just the section
                 var HEADER_RE = /==(=*)\s*(.+?)\s*\1==/g;
