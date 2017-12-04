@@ -265,6 +265,7 @@
                 setStatus( "There was an error while replying!" );
                 console.log( "Content request error: " + e.message );
                 //console.log( "Content request response: " + JSON.stringify( data ) );
+                throw e;
             }
         } ).fail( function () {
             setStatus( "While getting the wikitext, there was an AJAX error." );
@@ -372,8 +373,13 @@
             return;
         }
 
+        // We also should include the first header
+        if( headerIndex > 0 ) {
+             headerIndex--;
+        }
+
         // Each element is a 2-element list of [level, node]
-        var parseStack = iterableToList( contentEls ).slice( headerIndex - 1 );
+        var parseStack = iterableToList( contentEls ).slice( headerIndex );
         parseStack.reverse();
         parseStack = parseStack.map( function ( el ) { return [ "", el ]; } );
 
