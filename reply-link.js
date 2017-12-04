@@ -447,6 +447,12 @@
     }
 
     function onReady () {
+
+        // Exit if history page or edit page
+        if( mw.config.get( "wgAction" ) === "history" ) return;
+        if( document.getElementById( "editform" ) ) return;
+
+        // Insert "reply" links into DOM
         attachLinks();
 
         // Load CSS
