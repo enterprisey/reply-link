@@ -340,7 +340,7 @@
         // Loop until we get a header
         var headerIndex = 0;
         for( headerIndex = 0; headerIndex < contentEls.length; headerIndex++ ) {
-            if( contentEls[ headerIndex ].tagName.toLowerCase() === "h2" ) break;
+            if( contentEls[ headerIndex ].tagName.toLowerCase().startsWith( "h" ) ) break;
         }
 
         // If we didn't find any headers at all, that's a problem and we
