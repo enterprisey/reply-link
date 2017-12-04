@@ -1,6 +1,7 @@
 //<nowiki>
 ( function ( $, mw ) {
     var TIMESTAMP_REGEX = /\(UTC\)$/m;
+    var SIGNATURE = "~~" + "~~"; // split up because it might get processed
 
     /**
      * This function converts any (index-able) iterable into a list.
@@ -119,15 +120,16 @@
                 wikitext = data.query.pages[pageId].revisions[0]["*"];
 
                 // Generate reply in wikitext form
-                var reply = document.getElementById( "reply-dialog-field" ).value;
+                var reply = document.getElementById( "reply-dialog-field" ).value.trim();
+
+                // Add a signature if one isn't already there
+                if( !reply.endsWith( SIGNATURE ) ) {
+                    reply += " " + SIGNATURE;
+                }
+
                 var fullReply = reply.split( "\n" ).map( function ( line ) {
                     return indentation + ":" + line;
                 } ).join( "\n" );
-
-                // Split into two strings to avoid MediaWiki
-                // transforming this into the signature of this script's
-                // developer when saving with the web interface
-                fullReply += " ~~" + "~~";
 
                 // Extract wikitext of just the section
                 var sectionWikitext = getSectionWikitext( wikitext, header[2] );
