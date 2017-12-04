@@ -76,8 +76,7 @@
      * Returns -1 if we couldn't find anything.
      */
     function sigIdxtoStrIdx( sectionWikitext, sigIdx ) {
-         //var SIG_REGEX = /\[\[\s*(?:[Uu]ser|Special:Contributions\/).*\]\].*?\d\d:\d\d,\s\d{1,2}\s\w+?\s\d\d\d\d\s\(UTC\)|class\s*=\s*"autosigned".+?\(UTC\)<\/small>/g;
-         var SIG_REGEX = /\[\[\s*(?:[Uu]ser|Special:Contributions\/).*\]\].*?\d\d:\d\d,\s\d{1,2}\s\w+?\s\d\d\d\d\s\(UTC\)/g;
+         var SIG_REGEX = /\[\[\s*(?:[Uu]ser|Special:Contributions\/).*\]\].*?\d\d:\d\d,\s\d{1,2}\s\w+?\s\d\d\d\d\s\(UTC\)|class\s*=\s*"autosigned".+?\(UTC\)<\/small>/g;
          var matchIdx = 0;
          var match;
          while( true ) {
@@ -143,7 +142,19 @@
                 }
 
                 //console.log(sectionWikitext.substring( strIdx - 10, 20 ) );
-                console.log(sectionWikitext.slice(0,strIdx) + "&" + sectionWikitext.slice(strIdx));
+                //console.log(sectionWikitext.slice(0,strIdx) + "&" + sectionWikitext.slice(strIdx));
+
+                // Determine the user who wrote the comment, for
+                // edit-summary purposes
+                try {
+                    var userRgx = /\[\[\s*[Uu]ser(?:\s+talk)?\s*:\s*(.+?)(?:#.+)?(?:\|.+?)\]\]/g;
+                    var userMatches = sectionWikitext.slice( 0, strIdx )
+                            .match( userRgx );
+                    var commentingUser = userRgx.exec(
+                            userMatches[userMatches.length - 1] )[1];
+                } catch( e ) {
+                     // No big deal, we'll just not have a user in the summary
+                }
 
                 // Now, loop through all the comments replying to that
                 // one and place our reply after the last one
@@ -217,7 +228,9 @@
                         sectionWikitext );
 
                 // Build summary
-                var summary = "/* " + header[1] + " */ Replying ([[User:Enterprisey/reply-link|reply-link]])";
+                var summary = "/* " + header[1] + " */ Replying " +
+                    ( commentingUser ? " to comment by " + commentingUser + " " : "" ) +
+                    "([[User:Enterprisey/reply-link|reply-link]])";
 
                 // Send another request, this time to actually edit the
                 // page
@@ -269,7 +282,7 @@
      *  - index is the index of this link out of all the reply links in
      *    the section.
      */
-    function attachLinkAfterTextNode( node, indentation, header, index ) {
+    function attachLinkAfterNode( node, indentation, header, index ) {
 
         // Construct new link
         var newLinkWrapper = document.createElement( "span" );
@@ -374,12 +387,12 @@
             node = stackEl[1];
             currIndentation = stackEl[0];
 
-            if( node.nodeType === 3 )  {
+            if( ( node.nodeType === 3 ) ||
+                    ( "small" === node.tagName.toLowerCase() ) )  {
 
-                // If the current node is a text node with a timestamp,
-                // attach a link to it
+                // If the current node has a timestamp, attach a link to it
                 if( TIMESTAMP_REGEX.test( node.textContent ) ) {
-                    attachLinkAfterTextNode( node, currIndentation, currHeader );
+                    attachLinkAfterNode( node, currIndentation, currHeader );
                 }
             } else if( /p|dl|dd|ul|li/.test( node.tagName.toLowerCase() ) ) {
                 switch( node.tagName.toLowerCase() ) {
