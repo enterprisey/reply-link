@@ -1,7 +1,6 @@
 //<nowiki>
 ( function ( $, mw ) {
     var TIMESTAMP_REGEX = /\(UTC\)$/m;
-    var PARSOID_ENDPOINT = "https://en.wikipedia.org/api/rest_v1/transform/html/to/wikitext";
 
     /**
      * This function converts any (index-able) iterable into a list.
@@ -227,13 +226,20 @@
                     summary: summary,
                     text: newWikitext
                 } ).done ( function ( data ) {
+                    window.replyLinkReload = function () {
+                        window.location.hash = header[1].replace( / /g, "_" );
+                        window.location.reload( true );
+                    }
                     if ( data && data.edit && data.edit.result && data.edit.result == "Success" ) {
-                        setStatus( "Reply saved! (<a href='javascript:window.location.reload(true)' class='reload'>Reload</a>)" );
+                        setStatus( "Reply saved! (<a href='javascript:window.replyLinkReload()' class='reply-link-reload'>Reload</a>)" );
                     } else {
                         setStatus( "While saving, the edit query returned an error. =(" );
                     }
                     console.log(data);
                     document.getElementById( "reply-dialog-field" ).className.replace( " reply-dialog-pending", "" );
+                    if( window.replyLinkAutoReload ) {
+                        window.replyLinkReload();
+                    }
                 } ).fail ( function( code, result ) {
                     setStatus( "While saving, the AJAX request failed." );
                     console.log(code);
