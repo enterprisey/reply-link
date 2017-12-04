@@ -76,7 +76,8 @@
      * Returns -1 if we couldn't find anything.
      */
     function sigIdxtoStrIdx( sectionWikitext, sigIdx ) {
-         var SIG_REGEX = /\[\[\s*(?:[Uu]ser|Special:Contributions\/).*\]\].*?\d\d:\d\d,\s\d{1,2}\s\w+?\s\d\d\d\d\s\(UTC\)|class\s*=\s*"autosigned".+?\(UTC\)<\/small>/g;
+         //var SIG_REGEX = /\[\[\s*(?:[Uu]ser|Special:Contributions\/).*\]\].*?\d\d:\d\d,\s\d{1,2}\s\w+?\s\d\d\d\d\s\(UTC\)|class\s*=\s*"autosigned".+?\(UTC\)<\/small>/g;
+         var SIG_REGEX = /\[\[\s*(?:[Uu]ser|Special:Contributions\/).*\]\].*?\d\d:\d\d,\s\d{1,2}\s\w+?\s\d\d\d\d\s\(UTC\)/g;
          var matchIdx = 0;
          var match;
          while( true ) {
