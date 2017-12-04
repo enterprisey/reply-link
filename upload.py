@@ -1,33 +1,54 @@
-import pywikibot
+"""
+Usage:
+python upload.py [--test]
+
+--test, if specified, uploads to testwiki not enwiki.
+"""
+import getpass
+import git
+import re
+import os
 import sys
+import wikitools
+import base64
 
-if len(sys.argv) < 1:
-    print("usage: {} [SUMMARY] [--test]".format(sys.argv[0]))
-    print("  SUMMARY (optional): Some text to be included in the upload edit summary.")
-    print("  --test: If included, uploads to testwiki instead.")
-    sys.exit(0)
+API_ENTRY_POINT = "https://%s.wikipedia.org/w/api.php"
+SUMMARY = "Updating {} ({} @ {})"
+SCRIPT = "reply-link.js"
+USERNAME = "Enterprisey"
 
-lang = "en"
+def get_branch_and_hash():
+    repo = git.Repo(os.getcwd())
+    branch, sha1 = "", ""
+    try:
+        branch = repo.active_branch
+        sha1 = branch.commit.hexsha
+    except AttributeError:
+        branch = next(x for x in repo.branches if x.name == repo.active_branch)
+        sha1 = branch.commit.id
+    return branch, sha1
 
-if "--test" in sys.argv:
-    lang = "test"
-    sys.argv.remove("--test")
+def main():
+    wiki = "test" if (len(sys.argv) > 1 and sys.argv[1] == "--test") else "en"
+    title = "User:Enterprisey/" + SCRIPT
 
-wiki = pywikibot.Site(lang, "wikipedia")
-wiki.login()
-username = wiki.user()
-print("Logged in as {}.".format(username))
+    print("Uploading to {} on {}.wikipedia.org...".format(title, wiki))
 
-filename = "reply-link.js"
-print("Filename is {0}; will read from {0} and upload to User:{1}/{0}".format(filename, username))
+    site = wikitools.Wiki(API_ENTRY_POINT % wiki)
+    password = ""
+    if not password:
+        password = getpass.getpass("Password for %s on %s.wikipedia.org: " % (USERNAME, wiki))
+    site.login(USERNAME, password)
+    source = wikitools.Page(site, title=title)
 
-summary_extra = sys.argv[2] if len(sys.argv) == 3 else ''
+    print("Reading from {}...".format(SCRIPT))
+    with open(SCRIPT, "r") as target_file:
+        file_text = target_file.read()
+        branch, sha1 = get_branch_and_hash()
+        summary = SUMMARY.format(SCRIPT, sha1[:7], branch)
+        result = source.edit(text=file_text, summary=summary)
+        if "edit" in result and result["edit"]["result"] == "Success":
+            print("Successfully uploaded popups!")
 
-with open(filename, "r") as the_file:
-    page = pywikibot.Page(wiki, "User:{}/{}".format(username, filename))
-    page.text = the_file.read()
-    print("Read local file. Uploading...")
-    summary = "Updating script with local version"
-    if summary_extra:
-        summary += " - " + summary_extra
-    page.save(summary)
+if __name__ == "__main__":
+    main()

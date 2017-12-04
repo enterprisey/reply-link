@@ -33,176 +33,71 @@
     }
 
     /**
-     * Given a text node at the end of a comment, create a regular
-     * expression string (not an object) that can be used to match the
-     * wikitext of the comment.
-     *
-     * Why? Because the script's way of responding to a comment is to
-     * find its index in the wikitext, then splice our response in at
-     * that point. It's essential that our regex be as precise as
-     * possible to avoid responding to the wrong comment.
-     *
-     * callback is a function that is called once the regex is ready
-     * with the regex string as the first argument.
+     * Given some wikitext that's split into sections, return the full
+     * wikitext (including header and newlines until the next header)
+     * of the section with the given (zero-based) index.
      */
-    function getCmtWikitextRegex( finalTextNode, callback ) {
+    function getSectionWikitext( wikitext, sectionIdx ) {
+        var HEADER_RE = /==(=*)\s*(.+?)\s*\1==/g;
+        var headerCounter = 0;
+        var headerMatch;
 
-        // Loop through siblings and accumulate HTML
-        var siblings = iterableToList( finalTextNode.parentNode.childNodes );
-        siblings = siblings.slice( 0, siblings.indexOf( finalTextNode ) + 1 );
-        var html = siblings.reduce( function ( acc, node ) {
-            return acc + ( ( node.nodeType === 3 ) ? node.textContent : node.outerHTML );
-        }, "" );
+        var startIdx = -1; // wikitext index of section start
+        var endIdx = -1; // wikitext index of section end
 
-        // Deal with generic parsing mistakes: self-links and redlinks
-        // Each element in mistakes: a list of [name, regex,
-        // replacement] where name is a name for the mistake, regex is a
-        // regex that matches the HTML, and replacement is a function
-        // that takes the match object and returns some wikitext
-        //
-        // Our strategy: replace each mistake in the HTML with a unique
-        // key, send the HTML through Parsoid, and do the reverse
-        // replacement before we return the wikitext.
-        //
-        // NOTE! The regexes have to have the "g" flag to avoid an
-        // infinite loop.
-        var mistakes = [
-            [
-                "SELFLINK", /<a class="mw-selflink selflink">(.+)<\/a>/g,
-                function ( match ) {
-                    return "\\[\\[" +
-                        mw.config.get( "wgPageName" ).replace( /_/g, " " ) +
-                        "\\s*\\|\\s*" + match[1] + "\\]\\]";
+        do {
+            headerMatch = HEADER_RE.exec( wikitext );
+            if( headerMatch ) {
+                if( headerCounter === sectionIdx ) {
+                    startIdx = headerMatch.index;
+                } else if( headerCounter - 1 === sectionIdx ) {
+                    endIdx = headerMatch.index;
+                    break;
                 }
-            ], [
-                "REDLINK",
-                /<a href="(?:.+?)" class="new" title="(.+?) \(page does not exist\)">(.+?)<\/a>/g,
-                function ( match ) {
-                    if( match[2].replace( /\s*:\s*/, ":" ) === match[1] ) {
-                        return "\\[\\[" + match[2] + "\\]\\]";
-                    } else {
-                        return "\\[\\[" + match[1] + "\\s*\\|\\s*" + match[2] +
-                        "\\]\\]";
-                    }
-                }
-            ], [
-                "NOWIKI_BR",
-                /(<br\s*\/?\s*>)([^\n])/g,
-                function ( match ) {
-                    return "<nowiki>\\s*" + match[1] + "\\s*</nowiki>" +
-                        match[2];
-                }
-            ], [
-                "REGULAR_BR",
-                /(<br\s*\/?\s*>)\n/g,
-                function ( match ) {
-                    return "\\s*<\\s*br\\s*/?\\s*>\\s*\\n?\\s*";
-                }
-            ], [
-                "TL_TEMPLATE",
-                /\{\{<a href="\/wiki\/Template:.+?>(.+?)<\/a>.*?\}\}/g,
-                function ( match ) {
-                    return "\\{\\{\\s*tl\\s*\\|\\s*" + match[1] +
-                        "\\s*\\.*?\\}\\}";
-                }
-            ]
-        ];
+            }
+            headerCounter++;
+        } while( headerMatch );
 
-        var newHtml = html;
-        var match;
-        var key;
-        var selfLinkWikitextReplacements = {};
-        for( var i = 0; i < mistakes.length; i++ ) {
-            var name = mistakes[i][0],
-                regex = mistakes[i][1],
-                replacement = mistakes[i][2];
-            match = null;
-            do {
-                match = regex.exec( html );
-                if( match ) {
-                    key = "%!%!%" + name + "_" +
-                        Object.keys( selfLinkWikitextReplacements ).length +
-                        "%!%!%";
-                    newHtml = newHtml.replace( match[0], key );
-                    selfLinkWikitextReplacements[ key ] = replacement( match );
-                }
-            } while( match );
+        // If we encountered no section after the target section,
+        // then the target was the last one and the slice will go
+        // until the end of wikitext
+        if( endIdx < 0 ) {
+            endIdx = wikitext.length;
         }
 
-        // Use Parsoid to convert HTML to wikitext
-        var formData = new FormData();
-        formData.append( "html", newHtml );
+        return wikitext.slice( startIdx, endIdx );
+    }
 
-        // Set up the POST request
-        var xhr = new XMLHttpRequest();
-        xhr.open( "POST", PARSOID_ENDPOINT );
-
-        // The POST request is async, so this function must be as well
-        xhr.addEventListener( "load", function () {
-            var wikitext = xhr.responseText;
-            var finalRegex = escapeForRegex( wikitext );
-
-            // Do wikitext replacements
-            for( var key in selfLinkWikitextReplacements ) {
-                finalRegex = finalRegex.replace( key, selfLinkWikitextReplacements[ key ] );
-            }
-
-            // Other places to broaden/fix the regex include...
-
-            var orTemplate = function ( stringMatch ) {
-                return "(" + stringMatch + "|\\{\\{.+?\\}\\})";
-            };
-
-            // ...possible whitespace around the namespace
-            var LINK_RE = /\\\[\\\[(.+?\:.+?)(?:\\\|.+?)?\\\]\\\]/g;
-            finalRegex = finalRegex.replace( LINK_RE,
-                    function ( string_match ) {
-                        LINK_RE.lastIndex = 0;
-                        var match = LINK_RE.exec( string_match );
-                        return match[0].replace( match[1],
-                                match[1].replace( ":", "\\s*:\\s*" ) );
-                    } );
-
-            // ...abbreviations
-            var ABBR = /<abbr.+?<\\\/abbr>/;
-            finalRegex = finalRegex.replace( ABBR, orTemplate );
-
-            // ...code
-            var CODE = /<code>.+?<\\\/code>/;
-            finalRegex = finalRegex.replace( CODE, function ( stringMatch ) {
-                return "(" + stringMatch + "|\\{\\{.+?\\}\\}|<code>\\{\\{.+?\\}\\}<\\/code>)";
-            } );
-
-            // ...the small tag
-            var SMALL = /<small>.+?<\\\/small>/;
-            finalRegex = finalRegex.replace( SMALL,
-                    function ( stringMatch ) {
-                        var innerText = stringMatch.replace("<small>", "")
-                            .replace("<\\/small>", "");
-                        return "(" + stringMatch +
-                            "|\\{\\{\\s*small\\s*\\|\\s*" + innerText +
-                            "\\s*\\}\\})";
-                    } );
-
-            // ...spans with particular classes
-            var SPAN = /<span class="template\\-ping">.+?<\\\/span>/;
-            finalRegex = finalRegex.replace( SPAN, orTemplate );
-
-
-            callback( finalRegex );
-        } );
-        xhr.send( formData );
+    /**
+     * Converts a signature index to a string index into the given
+     * section wikitext. For example, if sigIdx is 1, then this function
+     * will return the index in sectionWikitext corresponding to right
+     * after the second signature appearing in sectionWikitext.
+     *
+     * Returns -1 if we couldn't find anything.
+     */
+    function sigIdxtoStrIdx( sectionWikitext, sigIdx ) {
+         var SIG_REGEX = /\[\[\s*(?:[Uu]ser|Special:Contributions\/).*\]\].*?\d\d:\d\d,\s\d{1,2}\s\w+?\s\d\d\d\d\s\(UTC\)|class\s*=\s*"autosigned".+?\(UTC\)<\/small>/g;
+         var matchIdx = 0;
+         var match;
+         while( true ) {
+              match = SIG_REGEX.exec( sectionWikitext );
+              if( !match ) return -1;
+              if( matchIdx === sigIdx ) return match.index + match[0].length;
+              matchIdx++;
+         }
     }
 
     /**
      * Using the text in #reply-dialog-field, add a reply to the
      * current page.
      */
-    function doReply( contextRegex, indentation, header ) {
+    function doReply( sigIdx, indentation, header ) {
         var wikitext;
 
         // Change UI to make it clear we're performing an operation
-        document.getElementById( "reply-dialog-field" ).className += " reply-dialog-pending";
+        document.getElementById( "reply-dialog-field" ).className +=
+                " reply-dialog-pending";
         document.querySelector( "#reply-dialog-button" ).disabled = true;
         setStatus( "Loading..." );
 
@@ -229,86 +124,49 @@
                 var fullReply = reply.split( "\n" ).map( function ( line ) {
                     return indentation + ":" + line;
                 } ).join( "\n" );
+
+                // Split into two strings to avoid MediaWiki
+                // transforming this into the signature of this script's
+                // developer when saving with the web interface
                 fullReply += " ~~" + "~~";
 
                 // Extract wikitext of just the section
-                var HEADER_RE = /==(=*)\s*(.+?)\s*\1==/g;
-                var headerCounter = 0;
-                var headerMatch;
-                var targetHeaderIdx = header[2];
-
-                // idxRange = [start, end], where the section starts at
-                // index start and ends right before index end.
-                var idxRange = [-1, -1];
-
-                do {
-                    headerMatch = HEADER_RE.exec( wikitext );
-                    if( headerMatch ) {
-                        if( headerCounter === targetHeaderIdx ) {
-                            idxRange[0] = headerMatch.index;
-                        } else if( headerCounter - 1 === targetHeaderIdx ) {
-                            idxRange[1] = headerMatch.index;
-                            break;
-                        }
-                    }
-                    headerCounter++;
-                } while( headerMatch );
-                if( idxRange[1] < 0 ) idxRange[1] = wikitext.length;
-
-                var sectionWikitext = wikitext.slice( idxRange[0],
-                        idxRange[1] );
+                var sectionWikitext = getSectionWikitext( wikitext, header[2] );
                 var oldSectionWikitext = sectionWikitext;
 
-                // Because the HTML sometimes has tricky whitespace
-                // character entities, strip them all out and put them
-                // in a dictionary to be readded
-                var entityIdxList = [];
-                var entityIdx;
-                for( ;; ) {
-                    entityIdx = sectionWikitext.lastIndexOf( "&nbsp;" );
-                    if( entityIdx < 0 ) break;
+                // Now, obtain the index of the end of the comment
+                var strIdx = sigIdxtoStrIdx( sectionWikitext, sigIdx );
 
-                    entityIdxList.push( entityIdx );
-                    sectionWikitext = sectionWikitext.slice( 0, entityIdx ) +
-                        " " +
-                        sectionWikitext.slice( entityIdx + "&nbsp;".length );
+                if( strIdx < 0 ) {
+                    throw { name: "OopsException",
+                        message: "Couldn't find the comment you're replying to!" };
                 }
 
-                console.log(sectionWikitext);
-                console.log(contextRegex);
-
-                // Replace non-breaking spaces (the rendered version)
-                // with regular spaces
-                contextRegex = contextRegex.replace( /[\s\u00A0]/g, function ( m ) {
-                    if( m.charCodeAt( 0 ) === 160 ) {
-                        return " ";
-                    } else {
-                        return m;
-                    }
-                } );
-                var ctxMatch = ( new RegExp( contextRegex, "g" ) ).exec( sectionWikitext );
-                console.log(ctxMatch);
-
-                // ctxIndex is the index right after the comment we're replying to
-                var ctxIndex = ctxMatch.index + ctxMatch[0].length;
+                //console.log(sectionWikitext.substring( strIdx - 10, 20 ) );
+                console.log(sectionWikitext.slice(0,strIdx) + "&" + sectionWikitext.slice(strIdx));
 
                 // Now, loop through all the comments replying to that
                 // one and place our reply after the last one
-                var slicedSecWikitext = sectionWikitext.slice( ctxIndex );
+                var slicedSecWikitext = sectionWikitext.slice( strIdx );
+                slicedSecWikitext = slicedSecWikitext.replace( /^\n/, "" );
                 var candidateLines = slicedSecWikitext.split( "\n" );
                 var replyLine = -2; // line number in sectionWikitext before reply
                 if( slicedSecWikitext.trim().length > 0 ) {
+
+                    // Store the indentation level of the comment we're
+                    // replying to
                     var prevIndentLevel = indentation.length;
-                    console.log("TARGET: " + prevIndentLevel);
                     var currIndentation, currIndentationLvl;
-                    console.log("<<" + slicedSecWikitext.trim() + ">>" );
                     for( var i = 0; i < candidateLines.length; i++ ) {
                         if( candidateLines[i].trim() === "" ) { console.log("hark a skip");continue; }
+
+                        // Detect indentation level of current line
                         currIndentation = /^[:\*]+/.exec( candidateLines[i] );
                         currIndentationLvl = currIndentation ? currIndentation[0].length : 0;
-                        console.log(">" + candidateLines[i] + "< => " + currIndentationLvl);
+                        //console.log(">" + candidateLines[i] + "< => " + currIndentationLvl);
+
                         if( currIndentationLvl <= prevIndentLevel ) {
-                            console.log("i is " + i );
+                            //console.log("i is " + i );
                             var onlyBlanksSoFar = candidateLines.slice( 0, i )
                                 .every( function ( line ) { return line.trim() === ""; } );
                             if( i === 0 || onlyBlanksSoFar ) replyLine = -1;
@@ -317,7 +175,6 @@
                             replyLine = i;
                         }
                     }
-                    console.log(replyLine);
 
                     if( replyLine < -1 ) {
                         replyLine = candidateLines.length - 1;
@@ -332,7 +189,7 @@
                     replyLine = -1;
                 }
 
-                if(replyLine>=0)console.log("("+replyLine+") >>" + candidateLines[replyLine] + "<<");
+                //if(replyLine>=0)console.log("("+replyLine+") >>" + candidateLines[replyLine] + "<<");
 
                 // Splice into slicedSecWikitext
                 slicedSecWikitext = candidateLines
@@ -346,26 +203,12 @@
                 }
 
                 // We may need an additional newline if the two slices don't have any
-                var optionalNewline = ( !sectionWikitext.slice( 0, ctxIndex ).endsWith( "\n" ) &&
+                var optionalNewline = ( !sectionWikitext.slice( 0, strIdx ).endsWith( "\n" ) &&
                             !slicedSecWikitext.startsWith( "\n" ) ) ? "\n" : "";
 
                 // Splice into sectionWikitext
-                sectionWikitext = sectionWikitext.slice( 0, ctxIndex ) +
+                sectionWikitext = sectionWikitext.slice( 0, strIdx ) +
                     optionalNewline + slicedSecWikitext;
-
-                // Correct indices of nbsp entities after reply
-                // insertion point
-                var replyIdx = sectionWikitext.indexOf( fullReply );
-                entityIdxList = entityIdxList.map( function ( idx ) {
-                    return ( idx >= replyIdx ) ? idx + fullReply.length + 2 : idx;
-                } );
-
-                // Put entities back
-                entityIdxList.reverse();
-                for( var i = 0; i < entityIdxList.length; i++ ) {
-                    sectionWikitext = sectionWikitext.slice( 0, entityIdxList[i] ) +
-                        "&nbsp;" + sectionWikitext.slice( entityIdxList[i] + 1 );
-                }
 
                 //console.log(sectionWikitext);
                 //return;
@@ -397,7 +240,7 @@
                     console.log(result);
                 } );
             } catch ( e ) {
-                setStatus( "While getting the wikitext, there was an error." );
+                setStatus( "There was an error while replying!" );
                 console.log( "Content request error: " + e.message );
                 //console.log( "Content request response: " + JSON.stringify( data ) );
             }
@@ -408,18 +251,26 @@
 
     /**
      * Adds a "(reply)" link after the provided text node.
+     *
+     * Arguments:
+     *  - indentation is the string of characters that were used to
+     *    indent the comment we're replying to.
+     *  - header is the 3-element list [level, text, number], where
+     *    level is the number giving the level of the header (h2 ->
+     *    level 2),
+     *  - text is the text content of the header
+     *  - index is the index of this link out of all the reply links in
+     *    the section.
      */
-    function attachLinkAfterTextNode( node, indentation, header ) {
-
-        // Verify that this text node ends with a timestamp
-        if( !TIMESTAMP_REGEX.test( node.textContent ) ) return;
+    function attachLinkAfterTextNode( node, indentation, header, index ) {
 
         // Construct new link
         var newLinkWrapper = document.createElement( "span" );
-        newLinkWrapper.className = "reply-dialog-wrapper";
+        newLinkWrapper.className = "reply-link-wrapper";
         var newLink = document.createElement( "a" );
         newLink.href = "#";
         newLink.appendChild( document.createTextNode( "reply" ) );
+        newLink.dataset.index = index;
         newLink.addEventListener( "click", function ( evt ) {
 
             // Remove previous panel
@@ -430,7 +281,7 @@
 
             // Reset previous cancel links
             iterableToList( document.querySelectorAll(
-                        ".reply-dialog-wrapper a" ) ).forEach( function ( el ) {
+                        ".reply-link-wrapper a" ) ).forEach( function ( el ) {
                 if( el != newLink ) el.textContent = "reply";
             } );
 
@@ -458,13 +309,12 @@
             node.parentNode.insertBefore( panelEl, newLinkWrapper.nextSibling );
             document.getElementById( "reply-dialog-field" ).style = "padding: 0.625em; min-height: 10em; margin-bottom: 0.75em;";
 
-            // Button event listener (we have to get context first)
-            getCmtWikitextRegex( node, function ( regex ) {
-                document.getElementById( "reply-dialog-button" )
-                    .addEventListener( "click", function () {
-                        doReply( regex, indentation, header );
-                    }.bind( this ) );
-            }.bind( this ) );
+            // Button event listener
+            var sigIdx = parseInt( this.dataset.index );
+            document.getElementById( "reply-dialog-button" )
+                .addEventListener( "click", function () {
+                    doReply( sigIdx, indentation, header );
+                }.bind( this ) );
 
             // Cancel default event handler
             evt.preventDefault();
@@ -517,10 +367,13 @@
             node = stackEl[1];
             currIndentation = stackEl[0];
 
-            if( node.nodeType === 3 ) {
+            if( node.nodeType === 3 )  {
 
-                // If the current node is a text node, attempt to attach a link
-                attachLinkAfterTextNode( node, currIndentation, currHeader );
+                // If the current node is a text node with a timestamp,
+                // attach a link to it
+                if( TIMESTAMP_REGEX.test( node.textContent ) ) {
+                    attachLinkAfterTextNode( node, currIndentation, currHeader );
+                }
             } else if( /p|dl|dd|ul|li/.test( node.tagName.toLowerCase() ) ) {
                 switch( node.tagName.toLowerCase() ) {
                 case "dl": newIndentSymbol = ":"; break;
@@ -547,6 +400,19 @@
                     currHeader = [ headerMatch[1], headerText, headerNum++ ];
                 }
             }
+        }
+
+        // Now, insert proper sig indexes for the links
+        var sigIdxEls = iterableToList( document.querySelectorAll(
+                "h2,h3,h4,h5,h6,span.reply-link-wrapper a" ) );
+        var currSigIdx = 0;
+        for( var i = 0; i < sigIdxEls.length; i++ ) {
+             if( sigIdxEls[i].tagName.toLowerCase().startsWith( "h" ) ) {
+                  currSigIdx = 0;
+             } else {
+                  sigIdxEls[i].dataset.index = currSigIdx;
+                  currSigIdx++;
+             }
         }
     }
 
