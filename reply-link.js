@@ -247,7 +247,9 @@
                         window.location.reload( true );
                     }
                     if ( data && data.edit && data.edit.result && data.edit.result == "Success" ) {
-                        setStatus( "Reply saved! (<a href='javascript:window.replyLinkReload()' class='reply-link-reload'>Reload</a>)" );
+                        var reloadHtml = window.replyLinkAutoReload ? "automatically reloading"
+                            : "<a href='javascript:window.replyLinkReload()' class='reply-link-reload'>Reload</a>";
+                        setStatus( "Reply saved! (" + reloadHtml + ")" );
                     } else {
                         setStatus( "While saving, the edit query returned an error. =(" );
                     }
