@@ -1,6 +1,6 @@
 //<nowiki>
 ( function ( $, mw ) {
-    var TIMESTAMP_REGEX = /\(UTC\)$/m;
+    var TIMESTAMP_REGEX = /\(UTC(?:−\d\d?)?\)$/m;
     var SIGNATURE = "~~" + "~~"; // split up because it might get processed
 
     /**
@@ -397,8 +397,14 @@
             node = stackEl[1];
             currIndentation = stackEl[0];
 
+            // Compatibility with "Comments in Local Time"
+            var isLocalCommentsSpan = node.nodeType === 1 &&
+                "span" === node.tagName.toLowerCase() &&
+                node.className.indexOf( "localcomments" ) >= 0;
+
             if( ( node.nodeType === 3 ) ||
-                    ( "small" === node.tagName.toLowerCase() ) )  {
+                    ( "small" === node.tagName.toLowerCase() ) ||
+                    isLocalCommentsSpan )  {
 
                 // If the current node has a timestamp, attach a link to it
                 if( TIMESTAMP_REGEX.test( node.textContent ) ) {
