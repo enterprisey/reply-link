@@ -1,6 +1,6 @@
 //<nowiki>
 ( function ( $, mw ) {
-    var TIMESTAMP_REGEX = /\(UTC(?:−\d\d?)?\)$/m;
+    var TIMESTAMP_REGEX = /\(UTC(?:(?:−|\+)\d+?(?:\.\d+)?)?\)$/m;
     var SIGNATURE = "~~" + "~~"; // split up because it might get processed
 
     /**
