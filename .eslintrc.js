@@ -4,6 +4,10 @@ module.exports = {
         "es6": true
     },
     "extends": "eslint:recommended",
+    "globals": {
+        "jQuery": false,
+        "mediaWiki": false
+    },
     "rules": {
         "indent": [
             "error",
@@ -20,6 +24,9 @@ module.exports = {
         "semi": [
             "error",
             "always"
+        ],
+        "no-console": [
+            "warn"
         ]
     }
 };
