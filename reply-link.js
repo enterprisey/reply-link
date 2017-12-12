@@ -25,14 +25,6 @@
     }
 
     /**
-     * Escapes someString for use in a regex.
-     * From https://stackoverflow.com/a/3561711/1757964.
-     */
-    function escapeForRegex( someString ) {
-        return someString.replace(/[-\/\\^$*+?.()|[\]{}]/g, "\\$&");
-    }
-
-    /**
      * Given some wikitext that's split into sections, return the full
      * wikitext (including header and newlines until the next header)
      * of the section with the given (zero-based) index.
@@ -77,15 +69,16 @@
      * Returns -1 if we couldn't find anything.
      */
     function sigIdxtoStrIdx( sectionWikitext, sigIdx ) {
-         var SIG_REGEX = /\[\[\s*(?:[Uu]ser|Special:Contributions\/).*\]\].*?\d\d:\d\d,\s\d{1,2}\s\w+?\s\d\d\d\d\s\(UTC\)|class\s*=\s*"autosigned".+?\(UTC\)<\/small>/g;
-         var matchIdx = 0;
-         var match;
-         while( true ) {
-              match = SIG_REGEX.exec( sectionWikitext );
-              if( !match ) return -1;
-              if( matchIdx === sigIdx ) return match.index + match[0].length;
-              matchIdx++;
-         }
+        var SIG_REGEX = /\[\[\s*(?:[Uu]ser|Special:Contributions\/).*\]\].*?\d\d:\d\d,\s\d{1,2}\s\w+?\s\d\d\d\d\s\(UTC\)|class\s*=\s*"autosigned".+?\(UTC\)<\/small>/g;
+        var matchIdx = 0;
+        var match;
+        var this_is_true = true;
+        while( this_is_true ) {
+            match = SIG_REGEX.exec( sectionWikitext );
+            if( !match ) return -1;
+            if( matchIdx === sigIdx ) return match.index + match[0].length;
+            matchIdx++;
+        }
     }
 
     /**
@@ -134,6 +127,8 @@
                 // Extract wikitext of just the section
                 var sectionWikitext = getSectionWikitext( wikitext, header[2] );
                 var oldSectionWikitext = sectionWikitext;
+                //console.log("Old section wikitext:");
+                //console.log(sectionWikitext);
 
                 // Now, obtain the index of the end of the comment
                 var strIdx = sigIdxtoStrIdx( sectionWikitext, sigIdx );
@@ -163,7 +158,7 @@
                 var slicedSecWikitext = sectionWikitext.slice( strIdx );
                 slicedSecWikitext = slicedSecWikitext.replace( /^\n/, "" );
                 var candidateLines = slicedSecWikitext.split( "\n" );
-                var replyLine = -2; // line number in sectionWikitext before reply
+                var replyLine = 0; // line number in sectionWikitext before reply
                 if( slicedSecWikitext.trim().length > 0 ) {
 
                     // Store the indentation level of the comment we're
@@ -179,30 +174,24 @@
                         //console.log(">" + candidateLines[i] + "< => " + currIndentationLvl);
 
                         if( currIndentationLvl <= prevIndentLevel ) {
-                            //console.log("i is " + i );
-                            var onlyBlanksSoFar = candidateLines.slice( 0, i )
-                                .every( function ( line ) { return line.trim() === ""; } );
-                            if( i === 0 || onlyBlanksSoFar ) replyLine = -1;
                             break;
                         } else {
                             replyLine = i;
                         }
                     }
 
-                    if( replyLine < -1 ) {
-                        replyLine = candidateLines.length - 1;
-                    }
-
-                    if( replyLine >= 0 ) {
-                        while( candidateLines[replyLine].trim() === "" ) replyLine--;
-                    }
+                    // If the post we're repliyng to had one or more
+                    // empty lines after it, preserve them
+                    while( replyLine >= 0 && candidateLines[replyLine].trim() === "" ) replyLine--;
                 } else {
 
                     // In this case, we may be replying to the last comment in a section
                     replyLine = -1;
                 }
 
-                //if(replyLine>=0)console.log("("+replyLine+") >>" + candidateLines[replyLine] + "<<");
+                //console.log( "replyLine = " + replyLine );
+
+                if(replyLine>=0)console.log("("+replyLine+") >>" + candidateLines[replyLine] + "<<");
 
                 // Splice into slicedSecWikitext
                 slicedSecWikitext = candidateLines
@@ -223,9 +212,6 @@
                 sectionWikitext = sectionWikitext.slice( 0, strIdx ) +
                     optionalNewline + slicedSecWikitext;
 
-                //console.log(sectionWikitext);
-                //return;
-
                 var newWikitext = wikitext.replace( oldSectionWikitext,
                         sectionWikitext );
 
@@ -245,7 +231,7 @@
                     window.replyLinkReload = function () {
                         window.location.hash = header[1].replace( / /g, "_" );
                         window.location.reload( true );
-                    }
+                    };
                     if ( data && data.edit && data.edit.result && data.edit.result == "Success" ) {
                         var reloadHtml = window.replyLinkAutoReload ? "automatically reloading"
                             : "<a href='javascript:window.replyLinkReload()' class='reply-link-reload'>Reload</a>";
@@ -265,7 +251,7 @@
                 } );
             } catch ( e ) {
                 setStatus( "There was an error while replying!" );
-                console.log( "Content request error: " + e.message );
+                console.log( "Content request error: " + JSON.stringify( e.message ) );
                 //console.log( "Content request response: " + JSON.stringify( data ) );
                 throw e;
             }
@@ -305,8 +291,9 @@
             }
 
             // Reset previous cancel links
-            iterableToList( document.querySelectorAll(
-                        ".reply-link-wrapper a" ) ).forEach( function ( el ) {
+            var cancelLinks = iterableToList( document.querySelectorAll(
+                        ".reply-link-wrapper a" ) );
+            cancelLinks.forEach( function ( el ) {
                 if( el != newLink ) el.textContent = "reply";
             } );
 
@@ -377,7 +364,7 @@
 
         // We also should include the first header
         if( headerIndex > 0 ) {
-             headerIndex--;
+            headerIndex--;
         }
 
         // Each element is a 2-element list of [level, node]
@@ -441,14 +428,14 @@
         // Now, insert proper sig indexes for the links
         var sigIdxEls = iterableToList( document.querySelectorAll(
                 "h2,h3,h4,h5,h6,span.reply-link-wrapper a" ) );
-        var currSigIdx = 0;
-        for( var i = 0; i < sigIdxEls.length; i++ ) {
-             if( sigIdxEls[i].tagName.toLowerCase().startsWith( "h" ) ) {
-                  currSigIdx = 0;
-             } else {
-                  sigIdxEls[i].dataset.index = currSigIdx;
-                  currSigIdx++;
-             }
+        var currSigIdx = 0, j, numSigIdxEls;
+        for( j = 0, numSigIdxEls = sigIdxEls.length; j < numSigIdxEls; j++ ) {
+            if( sigIdxEls[j].tagName.toLowerCase().startsWith( "h" ) ) {
+                currSigIdx = 0;
+            } else {
+                sigIdxEls[j].dataset.index = currSigIdx;
+                currSigIdx++;
+            }
         }
     }
 
