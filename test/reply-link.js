@@ -1,6 +1,8 @@
 var expect = require( "must" );
 var rewire = require( "rewire" );
 var promise = require( "promise" );
+var fs = require( "fs" );
+var path = require( "path" );
 
 // Use reWIRE to import the loader
 var replyLinkLoader = rewire( "../reply-link.js" );
@@ -51,7 +53,8 @@ describe( "insertTextAfterIdx", function () {
         var strIdx = replyLink.sigIdxToStrIdx( sectionWikitext, sigIdx );
         var newSectionWikitext = replyLink.insertTextAfterIdx( sectionWikitext,
                 strIdx, indentLvl, reply );
-        console.log( "|>" + newSectionWikitext + "<|" );
+        //console.log( "GOT: |>" + newSectionWikitext + "<|" );
+        //console.log( "EXPECTED: |>" + sectionWikitextWithReply + "<|" );
         expect( newSectionWikitext === sectionWikitextWithReply ).to.be.true();
     }
     it( "should insert in a one-comment section", function () {
@@ -78,6 +81,17 @@ describe( "insertTextAfterIdx", function () {
             var reply = "::r ~~~~";
             var result = "==Foo==\n\nA " + SIG1 + "\n\n:B " + SIG2 + "\n" + reply + "\n\n";
             doTest( sectionWikitext, 1, reply, 1, result );
+        } );
+    } );
+
+    describe( "should work in real-life cases", function () {
+        var testData = fs.readFileSync( path.join( __dirname, "test-data.txt" ), { "encoding": "utf-8" } );
+        var testDataSegments = testData.split( "~~~~~~~~~~\n" );
+        it( "#1", function () {
+            var sectionWikitext = testDataSegments[0];
+            var reply = "::::r ~~~~";
+            var result = testDataSegments[1];
+            doTest( sectionWikitext, 3, reply, 3, result );
         } );
     } );
 } );

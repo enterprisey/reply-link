@@ -1,0 +1,20 @@
+== Reply to reply breaks next section ==
+
+So when I replied to my own reply, [https://en.wikipedia.org/w/index.php?title=Wikipedia:Village_pump_(technical)&diff=811551841&oldid=811551539 this happened]. Regards '''[[User:SoWhy|<span style="color: #7A2F2F; font-variant:small-caps">So</span>]][[User talk:SoWhy|<span style="color: #474F84; font-variant:small-caps">Why</span>]]''' 10:22, 22 November 2017 (UTC)
+:I accidentally broke replying to comments at the end of a section. This reply should work, though! [[User:Enterprisey|Enterprisey]]&nbsp;([[User talk:Enterprisey|talk!]]) 10:41, 22 November 2017 (UTC)
+
+::[https://en.wikipedia.org/w/index.php?title=Wikipedia_talk:Did_you_know&diff=816103349&oldid=816100069 Still broken] :-/ Regards '''[[User:SoWhy|<span style="color: #7A2F2F; font-variant:small-caps">So</span>]][[User talk:SoWhy|<span style="color: #474F84; font-variant:small-caps">Why</span>]]''' 08:39, 19 December 2017 (UTC)
+
+:::[https://en.wikipedia.org/w/index.php?title=User_talk:Enterprisey/reply-link&diff=816103511&oldid=815029132 Broke section while reporting this]. Meta. Couldn't the script just check whether a "==" follows a signature and add a newline if that's the case? Regards '''[[User:SoWhy|<span style="color: #7A2F2F; font-variant:small-caps">So</span>]][[User talk:SoWhy|<span style="color: #474F84; font-variant:small-caps">Why</span>]]''' 08:41, 19 December 2017 (UTC)
+
+~~~~~~~~~~
+== Reply to reply breaks next section ==
+
+So when I replied to my own reply, [https://en.wikipedia.org/w/index.php?title=Wikipedia:Village_pump_(technical)&diff=811551841&oldid=811551539 this happened]. Regards '''[[User:SoWhy|<span style="color: #7A2F2F; font-variant:small-caps">So</span>]][[User talk:SoWhy|<span style="color: #474F84; font-variant:small-caps">Why</span>]]''' 10:22, 22 November 2017 (UTC)
+:I accidentally broke replying to comments at the end of a section. This reply should work, though! [[User:Enterprisey|Enterprisey]]&nbsp;([[User talk:Enterprisey|talk!]]) 10:41, 22 November 2017 (UTC)
+
+::[https://en.wikipedia.org/w/index.php?title=Wikipedia_talk:Did_you_know&diff=816103349&oldid=816100069 Still broken] :-/ Regards '''[[User:SoWhy|<span style="color: #7A2F2F; font-variant:small-caps">So</span>]][[User talk:SoWhy|<span style="color: #474F84; font-variant:small-caps">Why</span>]]''' 08:39, 19 December 2017 (UTC)
+
+:::[https://en.wikipedia.org/w/index.php?title=User_talk:Enterprisey/reply-link&diff=816103511&oldid=815029132 Broke section while reporting this]. Meta. Couldn't the script just check whether a "==" follows a signature and add a newline if that's the case? Regards '''[[User:SoWhy|<span style="color: #7A2F2F; font-variant:small-caps">So</span>]][[User talk:SoWhy|<span style="color: #474F84; font-variant:small-caps">Why</span>]]''' 08:41, 19 December 2017 (UTC)
+::::r ~~~~
+

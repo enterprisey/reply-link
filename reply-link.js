@@ -30,7 +30,7 @@ function loadReplyLink( $, mw ) {
      * of the section with the given (zero-based) index.
      */
     function getSectionWikitext( wikitext, sectionIdx ) {
-        var HEADER_RE = /==(=*)\s*(.+?)\s*\1==/g;
+        var HEADER_RE = /^==(=*)\s*(.+?)\s*\1==$/gm;
         var headerCounter = 0;
         var headerMatch;
 
@@ -213,7 +213,9 @@ function loadReplyLink( $, mw ) {
                 sectionWikitext = insertTextAfterIdx( sectionWikitext, strIdx,
                         indentation.length, fullReply );
 
+                //console.log( sectionWikitext );
                 /* es li nt-disable no-unreachable */
+                //return;
 
                 var newWikitext = wikitext.replace( oldSectionWikitext,
                         sectionWikitext );
