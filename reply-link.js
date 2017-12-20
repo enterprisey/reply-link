@@ -63,12 +63,12 @@ function loadReplyLink( $, mw ) {
     /**
      * Converts a signature index to a string index into the given
      * section wikitext. For example, if sigIdx is 1, then this function
-     * will return the index in sectionWikitext corresponding to right
+     * will return the index in sectionWikitext pointing to right
      * after the second signature appearing in sectionWikitext.
      *
      * Returns -1 if we couldn't find anything.
      */
-    function sigIdxtoStrIdx( sectionWikitext, sigIdx ) {
+    function sigIdxToStrIdx( sectionWikitext, sigIdx ) {
         var SIG_REGEX = /\[\[\s*(?:[Uu]ser|Special:Contributions\/).*\]\].*?\d\d:\d\d,\s\d{1,2}\s\w+?\s\d\d\d\d\s\(UTC\)|class\s*=\s*"autosigned".+?\(UTC\)<\/small>/g;
         var matchIdx = 0;
         var match;
@@ -79,6 +79,77 @@ function loadReplyLink( $, mw ) {
             if( matchIdx === sigIdx ) return match.index + match[0].length;
             matchIdx++;
         }
+    }
+
+    /**
+     * Inserts fullReply on the next sensible line after strIdx in
+     * sectionWikitext. indentLvl is the indentation level of the
+     * comment we're replying to.
+     */
+    function insertTextAfterIdx( sectionWikitext, strIdx, indentLvl, fullReply ) {
+        var slicedSecWikitext = sectionWikitext.slice( strIdx );
+        console.log("slicedSecWikitext = >>" + slicedSecWikitext.slice(0,50) + "<<");
+        slicedSecWikitext = slicedSecWikitext.replace( /^\n/, "" );
+        var candidateLines = slicedSecWikitext.split( "\n" );
+        console.log(candidateLines);
+        var replyLine = 0; // line number in sectionWikitext after reply
+        if( slicedSecWikitext.trim().length > 0 ) {
+            var currIndentation, currIndentationLvl;
+
+            // Now, loop through all the comments replying to that
+            // one and place our reply after the last one
+            for( var i = 0; i < candidateLines.length; i++ ) {
+                if( candidateLines[i].trim() === "" ) { console.log("hark a skip");continue; }
+
+                // Detect indentation level of current line
+                currIndentation = /^[:\*]+/.exec( candidateLines[i] );
+                currIndentationLvl = currIndentation ? currIndentation[0].length : 0;
+                console.log(">" + candidateLines[i] + "< => " + currIndentationLvl);
+
+                if( currIndentationLvl <= indentLvl ) {
+                    break;
+                } else {
+                    replyLine = i;
+                }
+            }
+            // If the post we're replying to had one or more
+            // empty lines after it, preserve them
+            while( replyLine >= 0 && candidateLines[replyLine].trim() === "" ) replyLine--;
+        } else {
+
+            // In this case, we may be replying to the last comment in a section
+            replyLine = candidateLines.length;
+
+            // Walk backwards until non-empty line
+            while( replyLine >= 1 && candidateLines[replyLine - 1].trim() === "" ) replyLine--;
+        }
+
+        console.log( "replyLine = " + replyLine );
+
+        if(replyLine>=0 && replyLine<candidateLines.length) {
+            console.log("("+replyLine+") >>" + candidateLines[replyLine] + "<<");
+        }
+
+        // Splice into slicedSecWikitext
+        slicedSecWikitext = candidateLines
+            .slice( 0, replyLine )
+            .concat( [ fullReply ], candidateLines.slice( replyLine ) )
+            .join( "\n" );
+
+        // Remove extra newlines
+        if( /\n\n\n+$/.test( slicedSecWikitext ) ) {
+            slicedSecWikitext = slicedSecWikitext.trim() + "\n\n";
+        }
+
+        // We may need an additional newline if the two slices don't have any
+        var optionalNewline = ( !sectionWikitext.slice( 0, strIdx ).endsWith( "\n" ) &&
+                    !slicedSecWikitext.startsWith( "\n" ) ) ? "\n" : "";
+
+        // Splice into sectionWikitext
+        sectionWikitext = sectionWikitext.slice( 0, strIdx ) +
+            optionalNewline + slicedSecWikitext;
+
+        return sectionWikitext;
     }
 
     /**
@@ -127,19 +198,9 @@ function loadReplyLink( $, mw ) {
                 // Extract wikitext of just the section
                 var sectionWikitext = getSectionWikitext( wikitext, header[2] );
                 var oldSectionWikitext = sectionWikitext;
-                //console.log("Old section wikitext:");
-                //console.log(sectionWikitext);
 
                 // Now, obtain the index of the end of the comment
-                var strIdx = sigIdxtoStrIdx( sectionWikitext, sigIdx );
-
-                if( strIdx < 0 ) {
-                    throw { name: "OopsException",
-                        message: "Couldn't find the comment you're replying to!" };
-                }
-
-                //console.log(sectionWikitext.substring( strIdx - 10, 20 ) );
-                //console.log(sectionWikitext.slice(0,strIdx) + "&" + sectionWikitext.slice(strIdx));
+                var strIdx = sigIdxToStrIdx( sectionWikitext, sigIdx );
 
                 // Determine the user who wrote the comment, for
                 // edit-summary purposes
@@ -153,64 +214,13 @@ function loadReplyLink( $, mw ) {
                      // No big deal, we'll just not have a user in the summary
                 }
 
-                // Now, loop through all the comments replying to that
-                // one and place our reply after the last one
-                var slicedSecWikitext = sectionWikitext.slice( strIdx );
-                slicedSecWikitext = slicedSecWikitext.replace( /^\n/, "" );
-                var candidateLines = slicedSecWikitext.split( "\n" );
-                var replyLine = 0; // line number in sectionWikitext before reply
-                if( slicedSecWikitext.trim().length > 0 ) {
+                // Actually insert our reply into the section wikitext
+                sectionWikitext = insertTextAfterIdx( sectionWikitext, strIdx,
+                        indentation.length, fullReply );
 
-                    // Store the indentation level of the comment we're
-                    // replying to
-                    var prevIndentLevel = indentation.length;
-                    var currIndentation, currIndentationLvl;
-                    for( var i = 0; i < candidateLines.length; i++ ) {
-                        if( candidateLines[i].trim() === "" ) { console.log("hark a skip");continue; }
-
-                        // Detect indentation level of current line
-                        currIndentation = /^[:\*]+/.exec( candidateLines[i] );
-                        currIndentationLvl = currIndentation ? currIndentation[0].length : 0;
-                        //console.log(">" + candidateLines[i] + "< => " + currIndentationLvl);
-
-                        if( currIndentationLvl <= prevIndentLevel ) {
-                            break;
-                        } else {
-                            replyLine = i;
-                        }
-                    }
-
-                    // If the post we're repliyng to had one or more
-                    // empty lines after it, preserve them
-                    while( replyLine >= 0 && candidateLines[replyLine].trim() === "" ) replyLine--;
-                } else {
-
-                    // In this case, we may be replying to the last comment in a section
-                    replyLine = -1;
-                }
-
-                //console.log( "replyLine = " + replyLine );
-
-                if(replyLine>=0)console.log("("+replyLine+") >>" + candidateLines[replyLine] + "<<");
-
-                // Splice into slicedSecWikitext
-                slicedSecWikitext = candidateLines
-                    .slice( 0, replyLine + 1 )
-                    .concat( [ fullReply ], candidateLines.slice( replyLine + 1 ) )
-                    .join( "\n" );
-
-                // Remove extra newlines
-                if( /\n\n\n+$/.test( slicedSecWikitext ) ) {
-                    slicedSecWikitext = slicedSecWikitext.trim() + "\n\n";
-                }
-
-                // We may need an additional newline if the two slices don't have any
-                var optionalNewline = ( !sectionWikitext.slice( 0, strIdx ).endsWith( "\n" ) &&
-                            !slicedSecWikitext.startsWith( "\n" ) ) ? "\n" : "";
-
-                // Splice into sectionWikitext
-                sectionWikitext = sectionWikitext.slice( 0, strIdx ) +
-                    optionalNewline + slicedSecWikitext;
+                console.log(sectionWikitext);
+                /* eslint-disable no-unreachable */
+                return;
 
                 var newWikitext = wikitext.replace( oldSectionWikitext,
                         sectionWikitext );
@@ -397,7 +407,7 @@ function loadReplyLink( $, mw ) {
                 if( TIMESTAMP_REGEX.test( node.textContent ) ) {
                     attachLinkAfterNode( node, currIndentation, currHeader );
                 }
-            } else if( /p|dl|dd|ul|li/.test( node.tagName.toLowerCase() ) ) {
+            } else if( /^(p|dl|dd|ul|li)$/.test( node.tagName.toLowerCase() ) ) {
                 switch( node.tagName.toLowerCase() ) {
                 case "dl": newIndentSymbol = ":"; break;
                 case "ul": newIndentSymbol = "*"; break;
@@ -463,7 +473,9 @@ function loadReplyLink( $, mw ) {
 
     // Return functions for testing
     return {
-        "iterableToList": iterableToList
+        "iterableToList": iterableToList,
+        "sigIdxToStrIdx": sigIdxToStrIdx,
+        "insertTextAfterIdx": insertTextAfterIdx
     }
 }
 
