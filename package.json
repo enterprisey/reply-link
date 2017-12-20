@@ -1,0 +1,12 @@
+{
+  "name": "reply-link",
+  "version": "0.0.1",
+  "scripts": {
+    "test": "$(npm root)/mocha/bin/mocha"
+  },
+  "devDependencies": {
+    "mocha": "*",
+    "must": "^0.13.4",
+    "promise": "^8.0.1"
+  }
+}

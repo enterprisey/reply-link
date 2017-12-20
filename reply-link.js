@@ -1,5 +1,5 @@
 //<nowiki>
-( function ( $, mw ) {
+function loadReplyLink( $, mw ) {
     var TIMESTAMP_REGEX = /\(UTC(?:(?:−|\+)\d+?(?:\.\d+)?)?\)$/m;
     var SIGNATURE = "~~" + "~~"; // split up because it might get processed
 
@@ -460,5 +460,21 @@
             mw.hook( "wikipage.content" ).add( onReady );
         } );
     }
-}( jQuery, mediaWiki ) );
+
+    // Return functions for testing
+    return {
+        "iterableToList": iterableToList
+    }
+}
+
+// Export functions for testing
+if( typeof module === typeof {} ) {
+    module.exports = { "loadReplyLink": loadReplyLink };
+}
+
+// If we're in the right environment, load the script
+if( ( typeof jQuery !== "undefined" ) &&
+        ( typeof mediaWiki !== "undefined" ) ) {
+    loadReplyLink( jQuery, mediaWiki );
+}
 //</nowiki>
