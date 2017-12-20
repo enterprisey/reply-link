@@ -53,8 +53,8 @@ describe( "insertTextAfterIdx", function () {
         var strIdx = replyLink.sigIdxToStrIdx( sectionWikitext, sigIdx );
         var newSectionWikitext = replyLink.insertTextAfterIdx( sectionWikitext,
                 strIdx, indentLvl, reply );
-        console.log( "GOT: |>" + newSectionWikitext + "<|" );
-        console.log( "EXPECTED: |>" + sectionWikitextWithReply + "<|" );
+        //console.log( "GOT: |>" + newSectionWikitext + "<|" );
+        //console.log( "EXPECTED: |>" + sectionWikitextWithReply + "<|" );
         expect( newSectionWikitext === sectionWikitextWithReply ).to.be.true();
     }
     it( "should insert in a one-comment section", function () {
