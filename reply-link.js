@@ -399,10 +399,10 @@ function loadReplyLink( $, mw ) {
                     isLocalCommentsSpan )  {
 
                 // If the current node has a timestamp, attach a link to it
-                if( TIMESTAMP_REGEX.test( node.textContent ) ) {
+                if( TIMESTAMP_REGEX.test( node.textContent.trim() ) ) {
                     attachLinkAfterNode( node, currIndentation, currHeader );
                 }
-            } else if( /^(p|dl|dd|ul|li)$/.test( node.tagName.toLowerCase() ) ) {
+            } else if( /^(p|dl|dd|ul|li|s|span)$/.test( node.tagName.toLowerCase() ) ) {
                 switch( node.tagName.toLowerCase() ) {
                 case "dl": newIndentSymbol = ":"; break;
                 case "ul": newIndentSymbol = "*"; break;

@@ -53,8 +53,8 @@ describe( "insertTextAfterIdx", function () {
         var strIdx = replyLink.sigIdxToStrIdx( sectionWikitext, sigIdx );
         var newSectionWikitext = replyLink.insertTextAfterIdx( sectionWikitext,
                 strIdx, indentLvl, reply );
-        //console.log( "GOT: |>" + newSectionWikitext + "<|" );
-        //console.log( "EXPECTED: |>" + sectionWikitextWithReply + "<|" );
+        console.log( "GOT: |>" + newSectionWikitext + "<|" );
+        console.log( "EXPECTED: |>" + sectionWikitextWithReply + "<|" );
         expect( newSectionWikitext === sectionWikitextWithReply ).to.be.true();
     }
     it( "should insert in a one-comment section", function () {
@@ -92,6 +92,13 @@ describe( "insertTextAfterIdx", function () {
             var reply = "::::r ~~~~";
             var result = testDataSegments[1];
             doTest( sectionWikitext, 3, reply, 3, result );
+        } );
+
+        it( "#2", function () {
+            var sw = testDataSegments[2];
+            var reply = ":::r ~~~~";
+            var res = testDataSegments[3];
+            doTest( sw, 11, reply, 2, res );
         } );
     } );
 } );
