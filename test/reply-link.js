@@ -53,9 +53,12 @@ describe( "insertTextAfterIdx", function () {
         var strIdx = replyLink.sigIdxToStrIdx( sectionWikitext, sigIdx );
         var newSectionWikitext = replyLink.insertTextAfterIdx( sectionWikitext,
                 strIdx, indentLvl, reply );
-        //console.log( "GOT: |>" + newSectionWikitext + "<|" );
-        //console.log( "EXPECTED: |>" + sectionWikitextWithReply + "<|" );
-        expect( newSectionWikitext === sectionWikitextWithReply ).to.be.true();
+        var success = newSectionWikitext === sectionWikitextWithReply;
+        if( !success ) {
+            console.log( "GOT: |>" + newSectionWikitext + "<|" );
+            console.log( "EXPECTED: |>" + sectionWikitextWithReply + "<|" );
+        }
+        expect( success ).to.be.true();
     }
     it( "should insert in a one-comment section", function () {
         doTest( "==Foo==\nHi! " + SIG1 + "\n", 0, ":r ~~~~", 0,
@@ -66,6 +69,13 @@ describe( "insertTextAfterIdx", function () {
         var sectionWikitext = "==Foo==\nA " + SIG1 + "\n:B " + SIG2 + "\n\n";
         doTest( sectionWikitext, 1, "::r ~~~~", 1,
                 sectionWikitext.trim() + "\n::r ~~~~\n\n" );
+    } );
+
+    it( "should reply to the first comment in a two-comment section", function () {
+        var sw = "==Foo==\nA " + SIG1 + "\n:B " + SIG2 + "\n\n";
+        var reply = ":r ~~~~";
+        var res = "==Foo==\nA " + SIG1 + "\n:B " + SIG2 + "\n:r ~~~~\n\n";
+        doTest( sw, 0, reply, 0, res );
     } );
 
     describe( "should insert in a two-comment section with blank lines", function () {
@@ -81,6 +91,22 @@ describe( "insertTextAfterIdx", function () {
             var reply = "::r ~~~~";
             var result = "==Foo==\n\nA " + SIG1 + "\n\n:B " + SIG2 + "\n" + reply + "\n\n";
             doTest( sectionWikitext, 1, reply, 1, result );
+        } );
+    } );
+
+    describe( "should work fine with the tq template", function () {
+        it( "around the comment being replied to", function () {
+            var sw = "==Foo==\n{{tq|A " + SIG1 + "}}\n\n";
+            var reply = ":r ~~~~";
+            var result = "==Foo==\n{{tq|A " + SIG1 + "}}\n:r ~~~~\n\n";
+            doTest( sw, 0, reply, 0, result );
+        } );
+
+        it( "around the comment being replied to, with an existing one", function () {
+            var sw = "==Foo==\n{{tq|A " + SIG1 + "}}\n:B " + SIG2 + "\n\n";
+            var reply = ":r ~~~~";
+            var result = "==Foo==\n{{tq|A " + SIG1 + "}}\n:B " + SIG2 + "\n:r ~~~~\n\n";
+            doTest( sw, 0, reply, 0, result );
         } );
     } );
 

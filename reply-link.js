@@ -87,10 +87,16 @@ function loadReplyLink( $, mw ) {
      * comment we're replying to.
      */
     function insertTextAfterIdx( sectionWikitext, strIdx, indentLvl, fullReply ) {
+
+        // strIdx should point to the end of a line
+        var counter = 0;
+        while( ( sectionWikitext[ strIdx ] !== "\n" ) && ( counter++ <= 50 ) ) strIdx++;
+
         var slicedSecWikitext = sectionWikitext.slice( strIdx );
         //console.log("slicedSecWikitext = >>" + slicedSecWikitext.slice(0,50) + "<<");
         slicedSecWikitext = slicedSecWikitext.replace( /^\n/, "" );
         var candidateLines = slicedSecWikitext.split( "\n" );
+        //console.log(candidateLines);
         var replyLine = 0; // line number in sectionWikitext after reply
         if( slicedSecWikitext.trim().length > 0 ) {
             var currIndentation, currIndentationLvl;
@@ -98,7 +104,10 @@ function loadReplyLink( $, mw ) {
             // Now, loop through all the comments replying to that
             // one and place our reply after the last one
             for( var i = 0; i < candidateLines.length; i++ ) {
-                if( candidateLines[i].trim() === "" ) { console.log("hark a skip");continue; }
+                if( candidateLines[i].trim() === "" ) {
+                    //console.log("hark a skip");
+                    continue;
+                }
 
                 // Detect indentation level of current line
                 currIndentation = /^[:\*]+/.exec( candidateLines[i] );
@@ -108,12 +117,12 @@ function loadReplyLink( $, mw ) {
                 if( currIndentationLvl <= indentLvl ) {
                     break;
                 } else {
-                    replyLine = i;
+                    replyLine = i + 1;
                 }
             }
             // If the post we're replying to had one or more
             // empty lines after it, preserve them
-            while( replyLine >= 0 && candidateLines[replyLine].trim() === "" ) replyLine--;
+            while( replyLine >= 1 && candidateLines[replyLine - 1].trim() === "" ) replyLine--;
         } else {
 
             // In this case, we may be replying to the last comment in a section
@@ -214,7 +223,7 @@ function loadReplyLink( $, mw ) {
                         indentation.length, fullReply );
 
                 //console.log( sectionWikitext );
-                /* es li nt-disable no-unreachable */
+                /* e slint-disable no-unreachable */
                 //return;
 
                 var newWikitext = wikitext.replace( oldSectionWikitext,
@@ -280,6 +289,14 @@ function loadReplyLink( $, mw ) {
      */
     function attachLinkAfterNode( node, indentation, header, index ) {
 
+        // Figure out a parent node
+        var parent = node;
+
+        // Go up one level until we're under a dd, li, p, or div
+        do {
+            parent = parent.parentNode;
+        } while( !( /^(p|dd|li|div)$/.test( parent.tagName.toLowerCase() ) ) );
+
         // Construct new link
         var newLinkWrapper = document.createElement( "span" );
         newLinkWrapper.className = "reply-link-wrapper";
@@ -323,7 +340,7 @@ function loadReplyLink( $, mw ) {
             panelEl.innerHTML = "<textarea id='reply-dialog-field' class='mw-ui-input' placeholder='Reply here!'></textarea>" +
                 "<button id='reply-dialog-button' class='mw-ui-button mw-ui-progressive'>Reply</button>" +
                 "&emsp;<span id='reply-dialog-status'></span>";
-            node.parentNode.insertBefore( panelEl, newLinkWrapper.nextSibling );
+            parent.insertBefore( panelEl, newLinkWrapper.nextSibling );
             document.getElementById( "reply-dialog-field" ).style = "padding: 0.625em; min-height: 10em; margin-bottom: 0.75em;";
 
             // Button event listener
@@ -342,7 +359,6 @@ function loadReplyLink( $, mw ) {
         newLinkWrapper.appendChild( document.createTextNode( ")" ) );
 
         // Insert new link into DOM
-        var parent = node.parentNode;
         parent.insertBefore( newLinkWrapper, node.nextSibling );
     }
 
@@ -471,7 +487,7 @@ function loadReplyLink( $, mw ) {
         "iterableToList": iterableToList,
         "sigIdxToStrIdx": sigIdxToStrIdx,
         "insertTextAfterIdx": insertTextAfterIdx
-    }
+    };
 }
 
 // Export functions for testing
