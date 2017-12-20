@@ -54,14 +54,30 @@ describe( "insertTextAfterIdx", function () {
         console.log( "|>" + newSectionWikitext + "<|" );
         expect( newSectionWikitext === sectionWikitextWithReply ).to.be.true();
     }
-    it( "should pass a basic test", function () {
+    it( "should insert in a one-comment section", function () {
         doTest( "==Foo==\nHi! " + SIG1 + "\n", 0, ":r ~~~~", 0,
                 "==Foo==\nHi! " + SIG1 + "\n:r ~~~~\n" );
     } );
 
-    it( "should pass another basic test", function () {
+    it( "should insert in a two-comment section", function () {
         var sectionWikitext = "==Foo==\nA " + SIG1 + "\n:B " + SIG2 + "\n\n";
         doTest( sectionWikitext, 1, "::r ~~~~", 1,
                 sectionWikitext.trim() + "\n::r ~~~~\n\n" );
+    } );
+
+    describe( "should insert in a two-comment section with blank lines", function () {
+        it( "around the comments", function () {
+            var sectionWikitext = "==Foo==\n\nA " + SIG1 + "\n:B " + SIG2 + "\n\n";
+            var reply = "::r ~~~~";
+            var result = "==Foo==\n\nA " + SIG1 + "\n:B " + SIG2 + "\n" + reply + "\n\n";
+            doTest( sectionWikitext, 1, reply, 1, result );
+        } );
+
+        it( "around the comments and one in between", function () {
+            var sectionWikitext = "==Foo==\n\nA " + SIG1 + "\n\n:B " + SIG2 + "\n\n";
+            var reply = "::r ~~~~";
+            var result = "==Foo==\n\nA " + SIG1 + "\n\n:B " + SIG2 + "\n" + reply + "\n\n";
+            doTest( sectionWikitext, 1, reply, 1, result );
+        } );
     } );
 } );

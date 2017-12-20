@@ -88,10 +88,9 @@ function loadReplyLink( $, mw ) {
      */
     function insertTextAfterIdx( sectionWikitext, strIdx, indentLvl, fullReply ) {
         var slicedSecWikitext = sectionWikitext.slice( strIdx );
-        console.log("slicedSecWikitext = >>" + slicedSecWikitext.slice(0,50) + "<<");
+        //console.log("slicedSecWikitext = >>" + slicedSecWikitext.slice(0,50) + "<<");
         slicedSecWikitext = slicedSecWikitext.replace( /^\n/, "" );
         var candidateLines = slicedSecWikitext.split( "\n" );
-        console.log(candidateLines);
         var replyLine = 0; // line number in sectionWikitext after reply
         if( slicedSecWikitext.trim().length > 0 ) {
             var currIndentation, currIndentationLvl;
@@ -104,7 +103,7 @@ function loadReplyLink( $, mw ) {
                 // Detect indentation level of current line
                 currIndentation = /^[:\*]+/.exec( candidateLines[i] );
                 currIndentationLvl = currIndentation ? currIndentation[0].length : 0;
-                console.log(">" + candidateLines[i] + "< => " + currIndentationLvl);
+                //console.log(">" + candidateLines[i] + "< => " + currIndentationLvl);
 
                 if( currIndentationLvl <= indentLvl ) {
                     break;
@@ -124,11 +123,7 @@ function loadReplyLink( $, mw ) {
             while( replyLine >= 1 && candidateLines[replyLine - 1].trim() === "" ) replyLine--;
         }
 
-        console.log( "replyLine = " + replyLine );
-
-        if(replyLine>=0 && replyLine<candidateLines.length) {
-            console.log("("+replyLine+") >>" + candidateLines[replyLine] + "<<");
-        }
+        //console.log( "replyLine = " + replyLine );
 
         // Splice into slicedSecWikitext
         slicedSecWikitext = candidateLines
@@ -218,9 +213,7 @@ function loadReplyLink( $, mw ) {
                 sectionWikitext = insertTextAfterIdx( sectionWikitext, strIdx,
                         indentation.length, fullReply );
 
-                console.log(sectionWikitext);
-                /* eslint-disable no-unreachable */
-                return;
+                /* es li nt-disable no-unreachable */
 
                 var newWikitext = wikitext.replace( oldSectionWikitext,
                         sectionWikitext );
