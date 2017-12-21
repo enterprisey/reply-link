@@ -120,17 +120,14 @@ function loadReplyLink( $, mw ) {
                     replyLine = i + 1;
                 }
             }
-            // If the post we're replying to had one or more
-            // empty lines after it, preserve them
-            while( replyLine >= 1 && candidateLines[replyLine - 1].trim() === "" ) replyLine--;
         } else {
 
             // In this case, we may be replying to the last comment in a section
             replyLine = candidateLines.length;
-
-            // Walk backwards until non-empty line
-            while( replyLine >= 1 && candidateLines[replyLine - 1].trim() === "" ) replyLine--;
         }
+
+        // Walk backwards until non-empty line
+        while( replyLine >= 1 && candidateLines[replyLine - 1].trim() === "" ) replyLine--;
 
         //console.log( "replyLine = " + replyLine );
 
