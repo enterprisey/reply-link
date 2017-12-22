@@ -28,8 +28,10 @@ function loadReplyLink( $, mw ) {
      * Given some wikitext that's split into sections, return the full
      * wikitext (including header and newlines until the next header)
      * of the section with the given (zero-based) index.
+     *
+     * Performs a sanity check with the given section name.
      */
-    function getSectionWikitext( wikitext, sectionIdx ) {
+    function getSectionWikitext( wikitext, sectionIdx, sectionName ) {
         var HEADER_RE = /^\s*==(=*)\s*(.+?)\s*\1==\s*$/gm;
         var headerCounter = 0;
         var headerMatch;
@@ -41,6 +43,11 @@ function loadReplyLink( $, mw ) {
             headerMatch = HEADER_RE.exec( wikitext );
             if( headerMatch ) {
                 if( headerCounter === sectionIdx ) {
+                    if( headerMatch[2] !== sectionName ) {
+                        throw( "Sanity check on header name failed! Found \"" +
+                                headerMatch[2] + "\", expected \"" +
+                                sectionName + "\" (wikitext vs DOM)" );
+                    }
                     startIdx = headerMatch.index;
                 } else if( headerCounter - 1 === sectionIdx ) {
                     endIdx = headerMatch.index;
@@ -197,7 +204,7 @@ function loadReplyLink( $, mw ) {
                 } ).join( "\n" );
 
                 // Extract wikitext of just the section
-                var sectionWikitext = getSectionWikitext( wikitext, header[2] );
+                var sectionWikitext = getSectionWikitext( wikitext, header[2], header[1] );
                 var oldSectionWikitext = sectionWikitext;
 
                 // Now, obtain the index of the end of the comment
