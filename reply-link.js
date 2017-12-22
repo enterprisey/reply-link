@@ -219,9 +219,10 @@ function loadReplyLink( $, mw ) {
                 sectionWikitext = insertTextAfterIdx( sectionWikitext, strIdx,
                         indentation.length, fullReply );
 
-                //console.log( sectionWikitext );
-                /* e slint-disable no-unreachable */
-                //return;
+                if( window.replyLinkDryRun ) {
+                    console.log( sectionWikitext );
+                    return;
+                }
 
                 var newWikitext = wikitext.replace( oldSectionWikitext,
                         sectionWikitext );
