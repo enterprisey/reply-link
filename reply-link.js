@@ -30,7 +30,7 @@ function loadReplyLink( $, mw ) {
      * of the section with the given (zero-based) index.
      */
     function getSectionWikitext( wikitext, sectionIdx ) {
-        var HEADER_RE = /^==(=*)\s*(.+?)\s*\1==$/gm;
+        var HEADER_RE = /^\s*==(=*)\s*(.+?)\s*\1==\s*$/gm;
         var headerCounter = 0;
         var headerMatch;
 
