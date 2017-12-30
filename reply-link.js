@@ -50,18 +50,10 @@ function loadReplyLink( $, mw ) {
      */
     function findMainContentEl() {
 
-        // Find a TOC, and get the id of the first heading el
-        var tocEl = document.getElementById( "toc" );
-
-        var fstHeaderTocEl = tocEl.querySelector( "li.toclevel-1.tocsection-1" );
-        var fstHeaderId = fstHeaderTocEl.childNodes[0].getAttribute( "href" ).replace( /^#/, "" );
-        console.log(fstHeaderId);
-
-        // Now, get the element with this ID.
-        // The element itself will be the anchor span in the h2; its
+        // The element itself will be the text span in the h2; its
         // parent will be the h2; and the parent of the h2 is the
         // content container that we want
-        return document.getElementById( fstHeaderId )
+        return document.querySelector( "span.mw-headline" )
             .parentElement
             .parentElement;
     }
