@@ -6,7 +6,8 @@ module.exports = {
     "extends": "eslint:recommended",
     "globals": {
         "jQuery": false,
-        "mediaWiki": false
+        "mediaWiki": false,
+        "module": false
     },
     "rules": {
         "indent": [

@@ -56,7 +56,7 @@ describe( "insertTextAfterIdx", function () {
         var success = newSectionWikitext === sectionWikitextWithReply;
         if( !success ) {
             console.log( "GOT: |>" + newSectionWikitext + "<|" );
-            console.log( "EXPECTED: |>" + sectionWikitextWithReply + "<|" );
+            //console.log( "EXPECTED: |>" + sectionWikitextWithReply + "<|" );
         }
         expect( success ).to.be.true();
     }
@@ -125,6 +125,13 @@ describe( "insertTextAfterIdx", function () {
             var reply = ":::r ~~~~";
             var res = testDataSegments[3];
             doTest( sw, 11, reply, 2, res );
+        } );
+
+        it( "#3", function () {
+            var sw = testDataSegments[4].replace( "\n:::r ~~~~", "" );
+            var reply = ":::r ~~~~";
+            var res = testDataSegments[4];
+            doTest( sw, 43, reply, 2, res );
         } );
     } );
 } );

@@ -51,3 +51,79 @@ In a recent AE case, I wanted to reply to a comment made by Sandstein in the sec
 ::Okay so I just about was going to say no..yet I tried to reply to you and I [https://en.wikipedia.org/w/index.php?title=User_talk:Enterprisey/reply-link&diff=814664334&oldid=814661830 replied to myself].. [[User:Galobtter|Galobtter]] ([[User talk:Galobtter|pingó mió]]) 04:35, 10 December 2017 (UTC)
 :::r ~~~~
 
+~~~~~~~~~~
+== Reply to reply breaks next section ==
+So when I replied to my own reply, [https://en.wikipedia.org/w/index.php?title=Wikipedia:Village_pump_(technical)&diff=811551841&oldid=811551539 this happened]. Regards '''[[User:SoWhy|<span style="color: #7A2F2F; font-variant:small-caps">So</span>]][[User talk:SoWhy|<span style="color: #474F84; font-variant:small-caps">Why</span>]]''' 10:22, 22 November 2017 (UTC)
+:I accidentally broke replying to comments at the end of a section. This reply should work, though! [[User:Enterprisey|Enterprisey]]&nbsp;([[User talk:Enterprisey|talk!]]) 10:41, 22 November 2017 (UTC)
+
+::[https://en.wikipedia.org/w/index.php?title=Wikipedia_talk:Did_you_know&diff=816103349&oldid=816100069 Still broken] :-/ Regards '''[[User:SoWhy|<span style="color: #7A2F2F; font-variant:small-caps">So</span>]][[User talk:SoWhy|<span style="color: #474F84; font-variant:small-caps">Why</span>]]''' 08:39, 19 December 2017 (UTC)
+
+:::[https://en.wikipedia.org/w/index.php?title=User_talk:Enterprisey/reply-link&diff=816103511&oldid=815029132 Broke section while reporting this]. Meta. Couldn't the script just check whether a "==" follows a signature and add a newline if that's the case? Regards '''[[User:SoWhy|<span style="color: #7A2F2F; font-variant:small-caps">So</span>]][[User talk:SoWhy|<span style="color: #474F84; font-variant:small-caps">Why</span>]]''' 08:41, 19 December 2017 (UTC)
+::::Might be fixed now. Anyway, I'm working on a test suite to run future versions of the script against, so I don't create more regressions like this. [[User:Enterprisey|Enterprisey]]&nbsp;([[User talk:Enterprisey|talk!]]) 16:04, 20 December 2017 (UTC)
+:::::Thanks. I'll come back if it's still broken ;-) Regards '''[[User:SoWhy|<span style="color: #7A2F2F; font-variant:small-caps">So</span>]][[User talk:SoWhy|<span style="color: #474F84; font-variant:small-caps">Why</span>]]''' 16:05, 20 December 2017 (UTC)
+:I assume [https://en.wikipedia.org/w/index.php?title=Wikipedia:Village_pump_(proposals)&diff=816565973&oldid=816565518 this] is the same issue? [[User:Galobtter|Galobtter]] ([[User talk:Galobtter|pingó mió]]) 05:15, 22 December 2017 (UTC) And while doing this reply [https://en.wikipedia.org/w/index.php?title=User_talk:Enterprisey/reply-link&diff=816566247&oldid=816428585 this] happened.. [[User:Galobtter|Galobtter]] ([[User talk:Galobtter|pingó mió]]) 05:16, 22 December 2017 (UTC)
+::That was a silly bug in another part of the code; I tried making the same two replies and it works now. [[User:Enterprisey|Enterprisey]]&nbsp;([[User talk:Enterprisey|talk!]]) 06:56, 22 December 2017 (UTC)
+:::Still seems to be happening :(. The reply is going above the section here. [[User:Galobtter|Galobtter]] ([[User talk:Galobtter|pingó mió]]) 07:16, 22 December 2017 (UTC)
+::::Ok, let's try this - can you go to your common.js and change reply-link to reply-link-dev? Then, attempting to reply should emit a lot of output, which you could put here in a {{tl|collapse top}}. That should make it easier to narrow down the issue. [[User:Enterprisey|Enterprisey]]&nbsp;([[User talk:Enterprisey|talk!]]) 09:27, 22 December 2017 (UTC)
+{{gray|(debug output has been analyzed)}}
+
+This what you want? [[User:Galobtter|Galobtter]] ([[User talk:Galobtter|pingó mió]]) 11:51, 22 December 2017 (UTC)
+:Absolutely! That's narrowed down the bug somewhat, so I added more logging statements. Can you refresh your cache, do the same thing again, and post the output here? [[User:Enterprisey|Enterprisey]]&nbsp;([[User talk:Enterprisey|talk!]]) 02:52, 23 December 2017 (UTC)
+{{cot|without error}}
+in doReply, header = Array(3)
+index.php:44 Array(3)
+index.php:44 Array(3)
+index.php:44 Array(3)
+index.php:44 Array(3)
+index.php:44 Array(3)
+index.php:44 Array(3)
+index.php:44 Array(3)
+index.php:44 Array(3)
+index.php:44 Array(3)
+index.php:44 Array(3)
+index.php:52 Header match found!
+index.php:44 null
+index.php:81 Entering sigIdxToStrIdx; sigIdx = 0
+index.php:88 sig match (matchIdx = 0) is >[[User:DPL bot|Opt-out instructions]].) --[[User:DPL bot|DPL bot]] ([[User talk:DPL bot|talk]]) 10:57, 22 December 2017 (UTC)< (index = 700)
+index.php:107 slicedSecWikitext = >><<
+index.php:143 replyLine = 0
+{{cob}}
+{{cot|with error}}
+in doReply, header = Array(3)
+/w/index.php?title=User:Enterprisey/reply-link-dev.js&action=raw&ctype=text/javascript:44 Array(3)
+/w/index.php?title=User:Enterprisey/reply-link-dev.js&action=raw&ctype=text/javascript:44 Array(3)
+/w/index.php?title=User:Enterprisey/reply-link-dev.js&action=raw&ctype=text/javascript:44 Array(3)
+/w/index.php?title=User:Enterprisey/reply-link-dev.js&action=raw&ctype=text/javascript:44 Array(3)
+/w/index.php?title=User:Enterprisey/reply-link-dev.js&action=raw&ctype=text/javascript:44 Array(3)
+/w/index.php?title=User:Enterprisey/reply-link-dev.js&action=raw&ctype=text/javascript:44 Array(3)
+/w/index.php?title=User:Enterprisey/reply-link-dev.js&action=raw&ctype=text/javascript:44 Array(3)
+/w/index.php?title=User:Enterprisey/reply-link-dev.js&action=raw&ctype=text/javascript:52 Header match found!
+/w/index.php?title=User:Enterprisey/reply-link-dev.js&action=raw&ctype=text/javascript:44 Array(3)
+/w/index.php?title=User:Enterprisey/reply-link-dev.js&action=raw&ctype=text/javascript:81 Entering sigIdxToStrIdx; sigIdx = NaN
+/w/index.php?title=User:Enterprisey/reply-link-dev.js&action=raw&ctype=text/javascript:88 sig match (matchIdx = 0) is >[[User:SoWhy|<span style="color: #7A2F2F; font-variant:small-caps">So</span>]][[User talk:SoWhy|<span style="color: #474F84; font-variant:small-caps">Why</span>]]''' 10:22, 22 November 2017 (UTC)< (index = 214)
+/w/index.php?title=User:Enterprisey/reply-link-dev.js&action=raw&ctype=text/javascript:88 sig match (matchIdx = 1) is >[[User:Enterprisey|Enterprisey]]&nbsp;([[User talk:Enterprisey|talk!]]) 10:41, 22 November 2017 (UTC)< (index = 510)
+:::re [[User:Enterprisey|Enterprisey]]&nbsp;([[User talk:Enterprisey|talk!]]) 06:00, 24 December 2017 (UTC)
+/w/index.php?title=User:Enterprisey/reply-link-dev.js&action=raw&ctype=text/javascript:88 sig match (matchIdx = 2) is >[[User:SoWhy|<span style="color: #7A2F2F; font-variant:small-caps">So</span>]][[User talk:SoWhy|<span style="color: #474F84; font-variant:small-caps">Why</span>]]''' 08:39, 19 December 2017 (UTC)< (index = 747)
+/w/index.php?title=User:Enterprisey/reply-link-dev.js&action=raw&ctype=text/javascript:88 sig match (matchIdx = 3) is >[[User:SoWhy|<span style="color: #7A2F2F; font-variant:small-caps">So</span>]][[User talk:SoWhy|<span style="color: #474F84; font-variant:small-caps">Why</span>]]''' 08:41, 19 December 2017 (UTC)< (index = 1213)
+/w/index.php?title=User:Enterprisey/reply-link-dev.js&action=raw&ctype=text/javascript:88 sig match (matchIdx = 4) is >[[User:Enterprisey|Enterprisey]]&nbsp;([[User talk:Enterprisey|talk!]]) 16:04, 20 December 2017 (UTC)< (index = 1561)
+/w/index.php?title=User:Enterprisey/reply-link-dev.js&action=raw&ctype=text/javascript:88 sig match (matchIdx = 5) is >[[User:SoWhy|<span style="color: #7A2F2F; font-variant:small-caps">So</span>]][[User talk:SoWhy|<span style="color: #474F84; font-variant:small-caps">Why</span>]]''' 16:05, 20 December 2017 (UTC)< (index = 1727)
+/w/index.php?title=User:Enterprisey/reply-link-dev.js&action=raw&ctype=text/javascript:88 sig match (matchIdx = 6) is >[[User:Galobtter|Galobtter]] ([[User talk:Galobtter|pingó mió]]) 05:15, 22 December 2017 (UTC) And while doing this reply [https://en.wikipedia.org/w/index.php?title=User_talk:Enterprisey/reply-link&diff=816566247&oldid=816428585 this] happened.. [[User:Galobtter|Galobtter]] ([[User talk:Galobtter|pingó mió]]) 05:16, 22 December 2017 (UTC)< (index = 2068)
+/w/index.php?title=User:Enterprisey/reply-link-dev.js&action=raw&ctype=text/javascript:88 sig match (matchIdx = 7) is >[[User:Enterprisey|Enterprisey]]&nbsp;([[User talk:Enterprisey|talk!]]) 06:56, 22 December 2017 (UTC)< (index = 2516)
+/w/index.php?title=User:Enterprisey/reply-link-dev.js&action=raw&ctype=text/javascript:88 sig match (matchIdx = 8) is >[[User:Galobtter|Galobtter]] ([[User talk:Galobtter|pingó mió]]) 07:16, 22 December 2017 (UTC)< (index = 2696)
+/w/index.php?title=User:Enterprisey/reply-link-dev.js&action=raw&ctype=text/javascript:88 sig match (matchIdx = 9) is >[[User:Enterprisey|Enterprisey]]&nbsp;([[User talk:Enterprisey|talk!]]) 09:27, 22 December 2017 (UTC)< (index = 3045)
+/w/index.php?title=User:Enterprisey/reply-link-dev.js&action=raw&ctype=text/javascript:88 sig match (matchIdx = 10) is >[[User:Galobtter|Galobtter]] ([[User talk:Galobtter|pingó mió]]) 11:51, 22 December 2017 (UTC)< (index = 3210)
+/w/index.php?title=User:Enterprisey/reply-link-dev.js&action=raw&ctype=text/javascript:88 sig match (matchIdx = 11) is >[[User:Enterprisey|Enterprisey]]&nbsp;([[User talk:Enterprisey|talk!]]) 02:52, 23 December 2017 (UTC)< (index = 3472)
+/w/index.php?title=User:Enterprisey/reply-link-dev.js&action=raw&ctype=text/javascript:278 Content request error: "Cannot read property '0' of null"
+/w/index.php?title=User:Enterprisey/reply-link-dev.js&action=raw&ctype=text/javascript:280 Uncaught TypeError: Cannot read property '0' of null
+    at sigIdxToStrIdx (/w/index.php?title=User:Enterprisey/reply-link-dev.js&action=raw&ctype=text/javascript:88)
+    at Object.<anonymous> (/w/index.php?title=User:Enterprisey/reply-link-dev.js&action=raw&ctype=text/javascript:216)
+    at fire (load.php?debug=false&lang=en&modules=jquery%2Cmediawiki|mediawiki.legacy.wikibits&only=scripts&skin=vector&version=1b46sjy:46)
+    at Object.fireWith [as resolveWith] (load.php?debug=false&lang=en&modules=jquery%2Cmediawiki|mediawiki.legacy.wikibits&only=scripts&skin=vector&version=1b46sjy:47)
+    at done (load.php?debug=false&lang=en&modules=jquery%2Cmediawiki|mediawiki.legacy.wikibits&only=scripts&skin=vector&version=1b46sjy:126)
+    at XMLHttpRequest.<anonymous> (load.php?debug=false&lang=en&modules=jquery%2Cmediawiki|mediawiki.legacy.wikibits&only=scripts&skin=vector&version=1b46sjy:129)
+{{cob}}
+Done. So when replying to you here it says "error when replying" and I've given the output there; on replying on my talk page there is no error, I also gave the output. [[User:Galobtter|Galobtter]] ([[User talk:Galobtter|pingó mió]]) 05:04, 23 December 2017 (UTC)
+:Hmm. I made a change that might solve the issue, so let me know if this happens again. (It might...) If not, I have something else I could try. Thanks for working to help fix this bug! [[User:Enterprisey|Enterprisey]]&nbsp;([[User talk:Enterprisey|talk!]]) 03:54, 24 December 2017 (UTC)
+:::Alright - I redid a large chunk of the script. Hopefully, this fixes it? [[User:Enterprisey|Enterprisey]]&nbsp;([[User talk:Enterprisey|talk!]]) 06:07, 25 December 2017 (UTC)
+:: [https://en.wikipedia.org/w/index.php?title=User_talk:Enterprisey/reply-link&diff=816854905&oldid=816849480 :(] Going to section above.. [[User:Galobtter|Galobtter]] ([[User talk:Galobtter|pingó mió]]) 04:56, 24 December 2017 (UTC)
+:::r ~~~~
