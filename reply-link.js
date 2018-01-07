@@ -65,16 +65,35 @@ function loadReplyLink( $, mw ) {
      *
      * Performs a sanity check with the given section name.
      */
-    function getSectionWikitext( wikitext, sectionIdx, sectionName ) {
+    function getSectionWikitext( dirtyWikitext, sectionIdx, sectionName ) {
         var HEADER_RE = /^\s*==(=*)\s*(.+?)\s*\1==\s*$/gm;
-        var headerCounter = 0;
-        var headerMatch;
 
-        console.log("In getSectionWikitext, sectionIdx = " + sectionIdx + ", sectionName = >" + sectionName + "<");
-        console.log("wikitext (first 1000 chars) is" + wikitext.substring(0, 1000));
+        //console.log("In getSectionWikitext, sectionIdx = " + sectionIdx + ", sectionName = >" + sectionName + "<");
+        //console.log("wikitext (first 1000 chars) is " + dirtyWikitext.substring(0, 1000));
+
+        // Parsing pitfall: we shouldn't recognize headers inside code
+        // blocks, or collapse blocks, because MW doesn't either
+        // So, replace both sorts of blocks with special keys
+        var DELIMS_RE = /<pre>[\s\S]+?<\/pre>/g;
+        var replacements = {}; // maps keys to blocks
+        var delimsMatch;
+        var wikitext = dirtyWikitext;
+        do {
+            delimsMatch = DELIMS_RE.exec( dirtyWikitext );
+            if( delimsMatch ) {
+                if( HEADER_RE.test( delimsMatch[0] ) ) {
+                    key = "%!%!%!" + ( Object.keys( replacements ).length ) + "!%!%!%";
+                    wikitext = wikitext.replace( delimsMatch[0], key );
+                    replacements[key] = delimsMatch[0];
+                }
+            }
+        } while( delimsMatch );
 
         var startIdx = -1; // wikitext index of section start
         var endIdx = -1; // wikitext index of section end
+
+        var headerCounter = 0;
+        var headerMatch;
 
         do {
             headerMatch = HEADER_RE.exec( wikitext );
@@ -103,8 +122,20 @@ function loadReplyLink( $, mw ) {
             endIdx = wikitext.length;
         }
 
-        console.log("[getSectionWikitext] Slicing from " + startIdx + " to " + endIdx);
-        return wikitext.slice( startIdx, endIdx );
+        //console.log("[getSectionWikitext] Slicing from " + startIdx + " to " + endIdx);
+        var cleanSlice = wikitext.slice( startIdx, endIdx );
+
+        // Now, inflate the blocks (if any) that we removed earlier
+        var slice = cleanSlice;
+        var KEY_RE = /%\!%\!%\!(\d+)\!%\!%\!%/g;
+        var keyMatch;
+        do {
+            keyMatch = KEY_RE.exec( cleanSlice );
+            if( keyMatch ) {
+                slice = slice.replace( keyMatch[0], replacements[ keyMatch[0] ] );
+            }
+        } while( keyMatch );
+        return slice;
     }
 
     /**
