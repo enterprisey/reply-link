@@ -46,6 +46,18 @@ describe( "iterableToList", function () {
     } );
 } );
 
+describe( "wikitextToTextContent", function () {
+    it( "doesn't touch normal text", function () {
+        var sampleNormalText = "asdf!@#$%^&*()";
+        expect( replyLink.wikitextToTextContent( sampleNormalText ) ).to.equal( sampleNormalText );
+    } );
+
+    it( "strips wikilinks", function () {
+        var sampleLink = "[[A#B|C]]";
+        expect( replyLink.wikitextToTextContent( sampleLink ) ).to.equal( "C" );
+    } );
+} );
+
 describe( "insertTextAfterIdx", function () {
 
     // Utilty function for testing

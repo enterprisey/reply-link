@@ -59,6 +59,16 @@ function loadReplyLink( $, mw ) {
     }
 
     /**
+     * Given some wikitext, processes it to get just the text content.
+     * This function should be identical to the MediaWiki function
+     * that gets the wikitext between the equal signs and comes up
+     * with the id's that anchor the headers.
+     */
+    function wikitextToTextContent( wikitext ) {
+        return wikitext.replace( /\[\[(?:[^\|]+?\|)?([^\]\|]+?)\]\]/g, "$1" );
+    }
+
+    /**
      * Given some wikitext that's split into sections, return the full
      * wikitext (including header and newlines until the next header)
      * of the section with the given (zero-based) index.
@@ -100,7 +110,7 @@ function loadReplyLink( $, mw ) {
             if( headerMatch ) {
                 console.log("Header " + headerCounter + " (idx " + headerMatch.index + "): >" + headerMatch[0] + "<");
                 if( headerCounter === sectionIdx ) {
-                    if( headerMatch[2] !== sectionName ) {
+                    if( wikitextToTextContent( headerMatch[2] ) !== sectionName ) {
                         throw( "Sanity check on header name failed! Found \"" +
                                 headerMatch[2] + "\", expected \"" +
                                 sectionName + "\" (wikitext vs DOM)" );
@@ -595,7 +605,8 @@ function loadReplyLink( $, mw ) {
     return {
         "iterableToList": iterableToList,
         "sigIdxToStrIdx": sigIdxToStrIdx,
-        "insertTextAfterIdx": insertTextAfterIdx
+        "insertTextAfterIdx": insertTextAfterIdx,
+        "wikitextToTextContent": wikitextToTextContent
     };
 }
 
