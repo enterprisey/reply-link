@@ -264,6 +264,7 @@ function loadReplyLink( $, mw ) {
         document.getElementById( "reply-dialog-field" ).style["background-image"] =
             "url(" + window.replyLinkPendingImageUrl + ")";
         document.querySelector( "#reply-dialog-button" ).disabled = true;
+        document.querySelector( "#reply-link-cancel-button" ).disabled = true;
         setStatus( "Loading..." );
 
         // Send request to fetch current page wikitext
@@ -428,6 +429,7 @@ function loadReplyLink( $, mw ) {
             panelEl.id = "reply-dialog-panel";
             panelEl.innerHTML = "<textarea id='reply-dialog-field' class='mw-ui-input' placeholder='Reply here!'></textarea>" +
                 "<button id='reply-dialog-button' class='mw-ui-button mw-ui-progressive'>Reply</button>" +
+                "<button id='reply-link-cancel-button' class='mw-ui-button mw-ui-quiet mw-ui-destructive'>Cancel</button>" +
                 "&emsp;<span id='reply-dialog-status'></span>";
             parent.insertBefore( panelEl, newLinkWrapper.nextSibling );
             document.getElementById( "reply-dialog-field" ).style = "padding: 0.625em; min-height: 10em; margin-bottom: 0.75em;";
@@ -441,6 +443,13 @@ function loadReplyLink( $, mw ) {
                     // [indentation, header, sigIdx]
                     doReply( ourMetadata[2], ourMetadata[0], ourMetadata[1] );
                 }.bind( this ) );
+
+            // Link cancel button event listener
+            document.getElementById( "reply-link-cancel-button" )
+                .addEventListener( "click", function () {
+                    newLink.textContent = "reply";
+                    panelEl.remove();
+                } );
 
             // Cancel default event handler
             evt.preventDefault();
