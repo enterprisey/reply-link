@@ -1,6 +1,4 @@
 *.swp
 .eslintcache
-asdf.txt
-upload.py
 node_modules/
 tags
