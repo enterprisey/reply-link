@@ -1,5 +1,7 @@
 """
 run `python upload.py --help` for usage
+
+requires GitPython
 """
 import argparse
 import base64
@@ -12,8 +14,6 @@ import pywikibot
 
 SUMMARY = "Updating {} ({} @ {})"
 SCRIPT_NAME = "reply-link"
-USERNAME = "Enterprisey"
-SCRIPT_ROOT = "User:{}/{}".format(USERNAME, SCRIPT_NAME)
 
 
 def get_branch_and_hash():
@@ -30,10 +30,10 @@ def get_branch_and_hash():
     return branch, sha1
 
 
-def update_doc_time(site: pywikibot.Site):
+def update_doc_time(site: pywikibot.Site, script_root: str):
     """Update the time on the docs."""
     print("Updating script documentation page.")
-    page = pywikibot.Page(site, title=SCRIPT_ROOT)
+    page = pywikibot.Page(site, title="User:Enterprisey/" + SCRIPT_NAME)
     docs_wikitext = page.get()
     date = re.search(r"start date and age\|\d+\|\d+\|\d+",
             docs_wikitext).group(0)
@@ -63,12 +63,13 @@ def main():
     args = parser.parse_args()
 
     wiki = "test" if args.test else "en"
-    title = SCRIPT_ROOT + ("-dev" if args.dev else "") + ".js"
-
-    print("Uploading to {} on {}.wikipedia.org...".format(title, wiki))
 
     site = pywikibot.Site(wiki, "wikipedia")
     site.login()
+    username = site.user()
+    script_root = "User:{}/{}".format(username, SCRIPT_NAME)
+    title = script_root + ("-dev" if args.dev else "") + ".js"
+    print("Uploading to {} on {}.wikipedia.org...".format(title, wiki))
     script_page = pywikibot.Page(site, title=title)
 
     local_script = SCRIPT_NAME + ".js"
@@ -82,7 +83,7 @@ def main():
 
                 # If this was the main update script, update the docs
                 if wiki == "en" and not args.dev:
-                    update_doc_time(site)
+                    update_doc_time(site, script_root)
         script_page.save(summary=SUMMARY.format(local_script,
                 sha1[:7], branch), callback=save_callback)
 
