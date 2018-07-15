@@ -82,7 +82,7 @@ def main():
                 print("Successfully uploaded {}!".format(SCRIPT_NAME))
 
                 # If this was the main update script, update the docs
-                if wiki == "en" and not args.dev:
+                if not args.test and not args.dev:
                     update_doc_time(site, script_root)
         script_page.save(summary=SUMMARY.format(local_script,
                 sha1[:7], branch), callback=save_callback)
