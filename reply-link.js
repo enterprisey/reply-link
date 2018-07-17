@@ -303,7 +303,7 @@ function loadReplyLink( $, mw ) {
 
                 // Add a signature if one isn't already there
                 if( !reply.endsWith( SIGNATURE ) ) {
-                    reply += " " + SIGNATURE;
+                    reply += " " + window.replyLinkSigPrefix + SIGNATURE;
                 }
 
                 var ourIndentation = rplyToXfdNom ? "* " : ":";
