@@ -8,19 +8,30 @@ function loadReplyLink( $, mw ) {
      * information for each "(reply)" link (represented by their unique
      * IDs):
      *
-     * - the indentation string for the comment (e.g. ":*::")
-     * - the header tuple for the parent section, in the form of
-     *   [level, text, number], where:
-     *     - level is 1 for a h1, 2 for a h2, etc
-     *     - text is the text between the equal signs
-     *     - number is the zero-based index of the heading from the top
-     * - sigIdx, or the zero-based index of the signature from the top
-     *   of the section
+     *  - the indentation string for the comment (e.g. ":*::")
+     *  - the header tuple for the parent section, in the form of
+     *    [level, text, number], where:
+     *      - level is 1 for a h1, 2 for a h2, etc
+     *      - text is the text between the equal signs
+     *      - number is the zero-based index of the heading from the top
+     *  - sigIdx, or the zero-based index of the signature from the top
+     *    of the section
      *
      * This dictionary is populated in attachLinks and used in the click
      * handler for the links, which is defined in attachLinkAfterNode.
      */
     var metadata = {};
+
+    /**
+     * This global string flag is:
+     *
+     *  - "AfD" if the current page is an AfD page
+     *  - "MfD" if the current page is an MfD page
+     *  - "" otherwise
+     *
+     * This flag is initialized in onReady and used in attachLinkAfterNode
+     */
+    var xfdType;
 
     /**
      * This function converts any (index-able) iterable into a list.
@@ -65,7 +76,7 @@ function loadReplyLink( $, mw ) {
      * with the id's that anchor the headers.
      */
     function wikitextToTextContent( wikitext ) {
-        return wikitext.replace( /\[\[(?:[^\|]+?\|)?([^\]\|]+?)\]\]/g, "$1" );
+        return wikitext.replace( /\[\[:?(?:[^\|]+?\|)?([^\]\|]+?)\]\]/g, "$1" );
     }
 
     /**
@@ -88,6 +99,7 @@ function loadReplyLink( $, mw ) {
         var replacements = {}; // maps keys to blocks
         var delimsMatch;
         var wikitext = dirtyWikitext;
+        var key;
         do {
             delimsMatch = DELIMS_RE.exec( dirtyWikitext );
             if( delimsMatch ) {
@@ -158,16 +170,16 @@ function loadReplyLink( $, mw ) {
      */
     function sigIdxToStrIdx( sectionWikitext, sigIdx ) {
         var SIG_REGEX = /(?:\[\[\s*(?:[Uu]ser|Special:Contributions\/).*\]\].*?\d\d:\d\d,\s\d{1,2}\s\w+?\s\d\d\d\d\s\(UTC\)|class\s*=\s*"autosigned".+?\(UTC\)<\/small>)\S*?$/gm;
-        var SIG_REGEX_ALT = /(?:\[\[\s*(?:[Uu]ser|Special:Contributions\/).*\]\].*?\d\d:\d\d,\s\d{1,2}\s\w+?\s\d\d\d\d\s\(UTC\)|class\s*=\s*"autosigned".+?\(UTC\)<\/small>)/gm;
+        //var SIG_REGEX_ALT = /(?:\[\[\s*(?:[Uu]ser|Special:Contributions\/).*\]\].*?\d\d:\d\d,\s\d{1,2}\s\w+?\s\d\d\d\d\s\(UTC\)|class\s*=\s*"autosigned".+?\(UTC\)<\/small>)/gm;
         console.log( "In sigIdxToStrIdx, sectionWikitext = >>>" + sectionWikitext + "<<<" );
         var matchIdx = 0;
         var match;
         var this_is_true = true;
         while( this_is_true ) {
             match = SIG_REGEX.exec( sectionWikitext );
-            console.log("SIG_REGEX: ");
+            //console.log("SIG_REGEX: ");
             //console.log(match);
-            console.log("SIG_REGEX_ALT: ");
+            //console.log("SIG_REGEX_ALT: ");
             //console.log(SIG_REGEX_ALT.exec( sectionWikitext ) );
             if( !match ) return -1;
             //console.log("sig match (matchIdx = " + matchIdx + ") is >" + match[0] + "< (index = " + match.index + ")");
@@ -255,9 +267,10 @@ function loadReplyLink( $, mw ) {
 
     /**
      * Using the text in #reply-dialog-field, add a reply to the
-     * current page.
+     * current page. rplyToXfdNom is true if we're replying to an XfD nom,
+     * in which case we should use an asterisk instead of a colon.
      */
-    function doReply( sigIdx, indentation, header ) {
+    function doReply( sigIdx, indentation, header, rplyToXfdNom ) {
         var wikitext;
 
         // Change UI to make it clear we're performing an operation
@@ -293,8 +306,9 @@ function loadReplyLink( $, mw ) {
                     reply += " " + SIGNATURE;
                 }
 
+                var ourIndentation = rplyToXfdNom ? "* " : ":";
                 var fullReply = reply.split( "\n" ).map( function ( line ) {
-                    return indentation + ":" + line;
+                    return indentation + ourIndentation + line;
                 } ).join( "\n" );
 
                 // Extract wikitext of just the section
@@ -321,6 +335,8 @@ function loadReplyLink( $, mw ) {
                 sectionWikitext = insertTextAfterIdx( sectionWikitext, strIdx,
                         indentation.length, fullReply );
 
+                // If the user preferences indicate a dry run, print what the
+                // wikitext would have been post-edit and bail out
                 if( window.replyLinkDryRun ) {
                     console.log( sectionWikitext );
                     return;
@@ -376,16 +392,24 @@ function loadReplyLink( $, mw ) {
 
     /**
      * Adds a "(reply)" link after the provided text node, giving it
-     * the provided element id.
+     * the provided element id. anyIndentation is true if there's any
+     * indentation (i.e. indentation string is not the empty string)
      */
-    function attachLinkAfterNode( node, preferredId ) {
+    function attachLinkAfterNode( node, preferredId, anyIndentation ) {
 
-        // Choose a parent node - walk up tree until we're under a dd,
-        // li, p, or div
+        // Choose a parent node - walk up tree until we're under a dd, li,
+        // p, or div. This walk is a bit unsafe, but this function should
+        // only get called in a place where the walk will succeed.
         var parent = node;
         do {
             parent = parent.parentNode;
         } while( !( /^(p|dd|li|div)$/.test( parent.tagName.toLowerCase() ) ) );
+
+        // If it's an XfD and the comment is non-indented, we are replying to a nom
+        var rplyToXfdNom = !!xfdType && !anyIndentation;
+
+        // Choose link label: if we're replying to an XfD, customize it
+        var linkLabel = "reply" + ( rplyToXfdNom ? " to " + xfdType : "" );
 
         // Construct new link
         var newLinkWrapper = document.createElement( "span" );
@@ -393,7 +417,8 @@ function loadReplyLink( $, mw ) {
         var newLink = document.createElement( "a" );
         newLink.href = "#";
         newLink.id = preferredId;
-        newLink.appendChild( document.createTextNode( "reply" ) );
+        newLink.dataset.originalLabel = linkLabel;
+        newLink.appendChild( document.createTextNode( linkLabel ) );
         newLink.addEventListener( "click", function ( evt ) {
 
             // Remove previous panel
@@ -406,18 +431,18 @@ function loadReplyLink( $, mw ) {
             var cancelLinks = iterableToList( document.querySelectorAll(
                         ".reply-link-wrapper a" ) );
             cancelLinks.forEach( function ( el ) {
-                if( el != newLink ) el.textContent = "reply";
+                if( el != newLink ) el.textContent = el.dataset.originalLabel;
             } );
 
             // Handle disable action
-            if( newLink.textContent === "reply" ) {
+            if( newLink.textContent === linkLabel ) {
 
                 // Disable this link
-                newLink.textContent = "cancel reply";
+                newLink.textContent = "cancel " + linkLabel;
             } else {
 
                 // We've already cancelled the reply
-                newLink.textContent = "reply";
+                newLink.textContent = linkLabel;
                 evt.preventDefault();
                 return false;
             }
@@ -432,22 +457,40 @@ function loadReplyLink( $, mw ) {
                 "<button id='reply-link-cancel-button' class='mw-ui-button mw-ui-quiet mw-ui-destructive'>Cancel</button>" +
                 "&emsp;<span id='reply-dialog-status'></span>";
             parent.insertBefore( panelEl, newLinkWrapper.nextSibling );
-            document.getElementById( "reply-dialog-field" ).style = "padding: 0.625em; min-height: 10em; margin-bottom: 0.75em;";
+            var replyDialogField = document.getElementById( "reply-dialog-field" );
+            replyDialogField.style = "padding: 0.625em; min-height: 10em; margin-bottom: 0.75em;";
+
+            /* Commented out because I could never get it to work
+            // Autofill with a recommendation if we're replying to a nom
+            if( rplyToXfdNom ) {
+                replyDialogField.value = "'''Comment'''";
+
+                // Highlight the "Comment" part so the user can change it
+                var range = document.createRange();
+                range.selectNodeContents( replyDialogField );
+                //range.setStart( replyDialogField, 3 ); // start of "Comment"
+                //range.setEnd( replyDialogField, 10 ); // end of "Comment"
+                var sel = window.getSelection();
+                sel.removeAllRanges();
+                sel.addRange( range );
+            }*/
+
+            // Fetch metadata about this specific comment
+            var ourMetadata = metadata[this.id];
 
             // Link event listener
-            var ourMetadata = metadata[this.id];
             document.getElementById( "reply-dialog-button" )
                 .addEventListener( "click", function () {
 
                     // ourMetadata contains data in the format:
                     // [indentation, header, sigIdx]
-                    doReply( ourMetadata[2], ourMetadata[0], ourMetadata[1] );
+                    doReply( ourMetadata[2], ourMetadata[0], ourMetadata[1], rplyToXfdNom );
                 }.bind( this ) );
 
             // Link cancel button event listener
             document.getElementById( "reply-link-cancel-button" )
                 .addEventListener( "click", function () {
-                    newLink.textContent = "reply";
+                    newLink.textContent = linkLabel;
                     panelEl.remove();
                 } );
 
@@ -511,14 +554,19 @@ function loadReplyLink( $, mw ) {
                 "span" === node.tagName.toLowerCase() &&
                 node.className.indexOf( "localcomments" ) >= 0;
 
+            // Small nodes are okay, unless they're delsort notices
+            var isOkSmallNode = node.nodeType === 1 &&
+                "small" === node.tagName.toLowerCase() &&
+                ( !xfdType || node.className.indexOf( "delsort-notice" ) < 0 );
+
             if( ( node.nodeType === 3 ) ||
-                    ( "small" === node.tagName.toLowerCase() ) ||
+                    isOkSmallNode ||
                     isLocalCommentsSpan )  {
 
                 // If the current node has a timestamp, attach a link to it
                 if( TIMESTAMP_REGEX.test( node.textContent.trim() ) ) {
                     linkId = "reply-link-" + idNum;
-                    attachLinkAfterNode( node, linkId );
+                    attachLinkAfterNode( node, linkId, !!currIndentation );
                     idNum++;
 
                     // Update global metadata dictionary
@@ -594,6 +642,17 @@ function loadReplyLink( $, mw ) {
         // Exit if history page or edit page
         if( mw.config.get( "wgAction" ) === "history" ) return;
         if( document.getElementById( "editform" ) ) return;
+
+        // Initialize the xfdType global variable, which must happen
+        // before the call to attachLinkx
+        var pageName = mw.config.get( "wgPageName" );
+        if( pageName.startsWith( "Wikipedia:Articles_for_deletion/" ) ) {
+            xfdType = "AfD";
+        } else if( pageName.startsWith( "Wikipedia:Miscellany_for_deletion/" ) ) {
+            xfdType = "MfD";
+        } else {
+            xfdType = "";
+        }
 
         // Insert "reply" links into DOM
         attachLinks();
