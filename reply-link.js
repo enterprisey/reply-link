@@ -202,30 +202,27 @@ function loadReplyLink( $, mw ) {
         sigMatchLoop:
         for( ; this_is_true ; matchIdx++ ) {
             match = SIG_REGEX.exec( sectionWikitext );
-            //console.log("SIG_REGEX: ");
-            //console.log(match);
-            //console.log("SIG_REGEX_ALT: ");
-            //console.log(SIG_REGEX_ALT.exec( sectionWikitext ) );
             if( !match ) return -1;
-            //console.log("sig match (matchIdx = " + matchIdx + ") is >" + match[0] + "< (index = " + match.index + ")");
+            //console.log("sig match (matchIdx = " + matchIdx + ") is (first 100 chars)>" + match[0].substring(0, 100) + "< (index = " + match.index + ")");
+
+            matchIdxEnd = match.index + match[0].length;
+
+            // Validate that we're not inside a delsort span
+            for( dstSpnIdx = 0; dstSpnIdx < spanStartIndices.length; dstSpnIdx++ ) {
+                if( ( match.index > spanStartIndices[dstSpnIdx] &&
+                    ( matchIdxEnd <= spanStartIndices[dstSpnIdx] +
+                        spanLengths[dstSpnIdx] ) ) ) {
+
+                    // That wasn't really a match (as in, this match does not
+                    // correspond to any sig idx in the DOM), so we can't
+                    // increment matchIdx
+                    matchIdx--;
+
+                    continue sigMatchLoop;
+                }
+            }
 
             if( matchIdx === sigIdx ) {
-                matchIdxEnd = match.index + match[0].length;
-
-                // Validate that we're not inside a delsort span
-                for( dstSpnIdx = 0; dstSpnIdx < spanStartIndices.length; dstSpnIdx++ ) {
-                    if( ( match.index > spanStartIndices[dstSpnIdx] &&
-                        ( matchIdxEnd <= spanStartIndices[dstSpnIdx] +
-                            spanLengths[dstSpnIdx] ) ) ) {
-
-                        // That wasn't really a match (as in, this match does not
-                        // correspond to any sig idx in the DOM), so we can't
-                        // increment matchIdx
-                        matchIdx--;
-
-                        continue sigMatchLoop;
-                    }
-                }
                 return match.index + match[0].length;
             }
         }
