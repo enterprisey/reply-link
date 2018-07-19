@@ -169,13 +169,38 @@ function loadReplyLink( $, mw ) {
      * Returns -1 if we couldn't find anything.
      */
     function sigIdxToStrIdx( sectionWikitext, sigIdx ) {
-        var SIG_REGEX = /(?:\[\[\s*(?:[Uu]ser|Special:Contributions\/).*\]\].*?\d\d:\d\d,\s\d{1,2}\s\w+?\s\d\d\d\d\s\(UTC\)|class\s*=\s*"autosigned".+?\(UTC\)<\/small>)\S*?$/gm;
+        //console.log( "In sigIdxToStrIdx, sigIdx = " + sigIdx );
         //var SIG_REGEX_ALT = /(?:\[\[\s*(?:[Uu]ser|Special:Contributions\/).*\]\].*?\d\d:\d\d,\s\d{1,2}\s\w+?\s\d\d\d\d\s\(UTC\)|class\s*=\s*"autosigned".+?\(UTC\)<\/small>)/gm;
-        console.log( "In sigIdxToStrIdx, sectionWikitext = >>>" + sectionWikitext + "<<<" );
+        //console.log( "In sigIdxToStrIdx, sectionWikitext = >>>" + sectionWikitext + "<<<" );
+
+        // Below, in attachLinks(), we skip spans with the class
+        // delsort-notice.  Those spans will almost always contain
+        // signatures, so we have to detect them and skip them here. We
+        // define two arrays with start indices and lengths of the spans,
+        // then skip each signature match that starts inside one of
+        // those ranges.
+        var spanStartIndices = [];
+        var spanLengths = [];
+        var DELSORT_SPAN_REGEX = /<small class="delsort-notice">.+?<\/small>/g;
+        var delsortSpanMatch;
+        do {
+            delsortSpanMatch = DELSORT_SPAN_REGEX.exec( sectionWikitext );
+            if( delsortSpanMatch ) {
+                spanStartIndices.push( delsortSpanMatch.index );
+                spanLengths.push( delsortSpanMatch[0].length );
+            }
+        } while( delsortSpanMatch );
+
+        var SIG_REGEX = /(?:\[\[\s*(?:[Uu]ser|Special:Contributions\/).*\]\].*?\d\d:\d\d,\s\d{1,2}\s\w+?\s\d\d\d\d\s\(UTC\)|class\s*=\s*"autosigned".+?\(UTC\)<\/small>)\S*?$/gm;
         var matchIdx = 0;
         var match;
+        var matchIdxEnd;
+        var dstSpnIdx;
+
+        // `this_is_true` is to avoid triggering a JS linter rule
         var this_is_true = true;
-        while( this_is_true ) {
+        sigMatchLoop:
+        for( ; this_is_true ; matchIdx++ ) {
             match = SIG_REGEX.exec( sectionWikitext );
             //console.log("SIG_REGEX: ");
             //console.log(match);
@@ -183,8 +208,26 @@ function loadReplyLink( $, mw ) {
             //console.log(SIG_REGEX_ALT.exec( sectionWikitext ) );
             if( !match ) return -1;
             //console.log("sig match (matchIdx = " + matchIdx + ") is >" + match[0] + "< (index = " + match.index + ")");
-            if( matchIdx === sigIdx ) return match.index + match[0].length;
-            matchIdx++;
+
+            if( matchIdx === sigIdx ) {
+                matchIdxEnd = match.index + match[0].length;
+
+                // Validate that we're not inside a delsort span
+                for( dstSpnIdx = 0; dstSpnIdx < spanStartIndices.length; dstSpnIdx++ ) {
+                    if( ( match.index > spanStartIndices[dstSpnIdx] &&
+                        ( matchIdxEnd <= spanStartIndices[dstSpnIdx] +
+                            spanLengths[dstSpnIdx] ) ) ) {
+
+                        // That wasn't really a match (as in, this match does not
+                        // correspond to any sig idx in the DOM), so we can't
+                        // increment matchIdx
+                        matchIdx--;
+
+                        continue sigMatchLoop;
+                    }
+                }
+                return match.index + match[0].length;
+            }
         }
     }
 
@@ -338,6 +381,7 @@ function loadReplyLink( $, mw ) {
                 // If the user preferences indicate a dry run, print what the
                 // wikitext would have been post-edit and bail out
                 if( window.replyLinkDryRun ) {
+                    console.log( "~~~~~~ DRY RUN CONCLUDED ~~~~~~" );
                     console.log( sectionWikitext );
                     return;
                 }
@@ -557,7 +601,7 @@ function loadReplyLink( $, mw ) {
             // Small nodes are okay, unless they're delsort notices
             var isOkSmallNode = node.nodeType === 1 &&
                 "small" === node.tagName.toLowerCase() &&
-                ( !xfdType || node.className.indexOf( "delsort-notice" ) < 0 );
+                node.className.indexOf( "delsort-notice" ) < 0;
 
             if( ( node.nodeType === 3 ) ||
                     isOkSmallNode ||
@@ -644,7 +688,7 @@ function loadReplyLink( $, mw ) {
         if( document.getElementById( "editform" ) ) return;
 
         // Initialize the xfdType global variable, which must happen
-        // before the call to attachLinkx
+        // before the call to attachLinks
         var pageName = mw.config.get( "wgPageName" );
         if( pageName.startsWith( "Wikipedia:Articles_for_deletion/" ) ) {
             xfdType = "AfD";
