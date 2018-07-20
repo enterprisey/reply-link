@@ -27,6 +27,8 @@ function loadReplyLink( $, mw ) {
      *
      *  - "AfD" if the current page is an AfD page
      *  - "MfD" if the current page is an MfD page
+     *  - "TfD" if the current page is a TfD log page
+     *  - "CfD" if the current page is a CfD log page
      *  - "" otherwise
      *
      * This flag is initialized in onReady and used in attachLinkAfterNode
@@ -387,8 +389,10 @@ function loadReplyLink( $, mw ) {
                         sectionWikitext );
 
                 // Build summary
+                var postNoun = rplyToXfdNom ? xfdType + " nomination" : "comment";
                 var summary = "/* " + header[1] + " */ Replying " +
-                    ( commentingUser ? " to comment by " + commentingUser + " " : "" ) +
+                    ( commentingUser ? " to " + postNoun + " by " +
+                        commentingUser + " " : "" ) +
                     "([[User:Enterprisey/reply-link|reply-link]])";
 
                 // Send another request, this time to actually edit the
@@ -446,8 +450,28 @@ function loadReplyLink( $, mw ) {
             parent = parent.parentNode;
         } while( !( /^(p|dd|li|div)$/.test( parent.tagName.toLowerCase() ) ) );
 
-        // If it's an XfD and the comment is non-indented, we are replying to a nom
-        var rplyToXfdNom = !!xfdType && !anyIndentation;
+        // Determine whether we're replying to an XfD nom
+        var rplyToXfdNom = false;
+        if( xfdType === "AfD" || xfdType === "MfD" ) {
+
+            // If the comment is non-indented, we are replying to a nom
+            rplyToXfdNom = !anyIndentation;
+        } else if( xfdType === "TfD" ) {
+
+            // If the sibling before the previous sibling of this node
+            // is a h4, then this is a nom
+            rplyToXfdNom = parent.previousElementSibling &&
+                parent.previousElementSibling.previousElementSibling &&
+                parent.previousElementSibling.previousElementSibling.nodeType === 1 &&
+                parent.previousElementSibling.previousElementSibling.tagName.toLowerCase() === "h4";
+        } else if( xfdType === "CfD" ) {
+
+            // If our grandparent is a dl and our grandparent's previous
+            // sibling is a h4, then this is a nom
+            rplyToXfdNom = parent.parentNode.tagName.toLowerCase() === "dl" &&
+                parent.parentNode.previousElementSibling.nodeType === 1 &&
+                parent.parentNode.previousElementSibling.tagName.toLowerCase() === "h4";
+        }
 
         // Choose link label: if we're replying to an XfD, customize it
         var linkLabel = "reply" + ( rplyToXfdNom ? " to " + xfdType : "" );
@@ -687,12 +711,17 @@ function loadReplyLink( $, mw ) {
         // Initialize the xfdType global variable, which must happen
         // before the call to attachLinks
         var pageName = mw.config.get( "wgPageName" );
-        if( pageName.startsWith( "Wikipedia:Articles_for_deletion/" ) ) {
-            xfdType = "AfD";
-        } else if( pageName.startsWith( "Wikipedia:Miscellany_for_deletion/" ) ) {
-            xfdType = "MfD";
-        } else {
-            xfdType = "";
+        xfdType = "";
+        if( mw.config.get( "wgNamespaceNumber" ) === 4) {
+            if( pageName.startsWith( "Wikipedia:Articles_for_deletion/" ) ) {
+                xfdType = "AfD";
+            } else if( pageName.startsWith( "Wikipedia:Miscellany_for_deletion/" ) ) {
+                xfdType = "MfD";
+            } else if( pageName.startsWith( "Wikipedia:Templates_for_discussion/Log/" ) ) {
+                xfdType = "TfD";
+            } else if( pageName.startsWith( "Wikipedia:Categories_for_discussion/Log/" ) ) {
+                xfdType = "CfD";
+            }
         }
 
         // Insert "reply" links into DOM
