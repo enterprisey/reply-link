@@ -171,29 +171,37 @@ function loadReplyLink( $, mw ) {
      * Returns -1 if we couldn't find anything.
      */
     function sigIdxToStrIdx( sectionWikitext, sigIdx ) {
-        //console.log( "In sigIdxToStrIdx, sigIdx = " + sigIdx );
+        console.log( "In sigIdxToStrIdx, sigIdx = " + sigIdx );
         //var SIG_REGEX_ALT = /(?:\[\[\s*(?:[Uu]ser|Special:Contributions\/).*\]\].*?\d\d:\d\d,\s\d{1,2}\s\w+?\s\d\d\d\d\s\(UTC\)|class\s*=\s*"autosigned".+?\(UTC\)<\/small>)/gm;
         //console.log( "In sigIdxToStrIdx, sectionWikitext = >>>" + sectionWikitext + "<<<" );
 
-        // Below, in attachLinks(), we skip spans with the class
-        // delsort-notice.  Those spans will almost always contain
-        // signatures, so we have to detect them and skip them here. We
-        // define two arrays with start indices and lengths of the spans,
-        // then skip each signature match that starts inside one of
-        // those ranges.
+        // There are certain regions that we skip while attaching links:
+        //
+        //  - Spans with the class delsort-notice
+        //  - Divs with the class xfd-relist
+        //  - Some others
+        //
+        // So, we grab the corresponding wikitext regions with regexes,
+        // and store each region's start index in spanStartIndices,
+        // and each region's length in spanLengths. Then, whenever
+        // we find a signature with the right index, we check if it's
+        // included in one of these regions before we return it.
         var spanStartIndices = [];
         var spanLengths = [];
-        var DELSORT_SPAN_REGEX = /<small class="delsort-notice">.+?<\/small>/g;
-        var delsortSpanMatch;
+        var DELSORT_SPAN_RE_TXT = /<small class="delsort-notice">(?:<small>.+?<\/small>|.)+?<\/small>/.source;
+        var XFD_RELIST_RE_TXT = /<div class="xfd_relist"[\s\S]+?<\/div>(\s*|<!--.+?-->)*/.source;
+        var SKIP_REGION_RE = new RegExp("(" + DELSORT_SPAN_RE_TXT + ")|(" + XFD_RELIST_RE_TXT + ")", "g");
+        var skipRegionMatch;
         do {
-            delsortSpanMatch = DELSORT_SPAN_REGEX.exec( sectionWikitext );
-            if( delsortSpanMatch ) {
-                spanStartIndices.push( delsortSpanMatch.index );
-                spanLengths.push( delsortSpanMatch[0].length );
+            skipRegionMatch = SKIP_REGION_RE.exec( sectionWikitext );
+            if( skipRegionMatch ) {
+                spanStartIndices.push( skipRegionMatch.index );
+                spanLengths.push( skipRegionMatch[0].length );
             }
-        } while( delsortSpanMatch );
+        } while( skipRegionMatch );
+        console.log(spanStartIndices,spanLengths);
 
-        var SIG_REGEX = /(?:\[\[\s*(?:[Uu]ser|Special:Contributions\/).*\]\].*?\d\d:\d\d,\s\d{1,2}\s\w+?\s\d\d\d\d\s\(UTC\)|class\s*=\s*"autosigned".+?\(UTC\)<\/small>)\S*?$/gm;
+        var SIG_REGEX = /(?:\[\[\s*(?:[Uu]ser|Special:Contributions\/).*\]\].*?\d\d:\d\d,\s\d{1,2}\s\w+?\s\d\d\d\d\s\(UTC\)|class\s*=\s*"autosigned".+?\(UTC\)<\/small>)(?:\S|\s*<!--.+?-->)*?$/gm;
         var matchIdx = 0;
         var match;
         var matchIdxEnd;
@@ -204,13 +212,20 @@ function loadReplyLink( $, mw ) {
         sigMatchLoop:
         for( ; this_is_true ; matchIdx++ ) {
             match = SIG_REGEX.exec( sectionWikitext );
-            if( !match ) return -1;
+            if( !match ) {
+                console.log("[sigIdxToStrIdx] out of matches");
+                return -1;
+            }
             //console.log("sig match (matchIdx = " + matchIdx + ") is (first 100 chars)>" + match[0].substring(0, 100) + "< (index = " + match.index + ")");
+            console.log("sig match (matchIdx = " + matchIdx + ") is >" + match[0] + "< (index = " + match.index + ")");
 
             matchIdxEnd = match.index + match[0].length;
 
             // Validate that we're not inside a delsort span
             for( dstSpnIdx = 0; dstSpnIdx < spanStartIndices.length; dstSpnIdx++ ) {
+                //console.log(spanStartIndices[dstSpnIdx],match.index,
+                //    matchIdxEnd, spanStartIndices[dstSpnIdx] +
+                //        spanLengths[dstSpnIdx] );
                 if( ( match.index > spanStartIndices[dstSpnIdx] &&
                     ( matchIdxEnd <= spanStartIndices[dstSpnIdx] +
                         spanLengths[dstSpnIdx] ) ) ) {
@@ -234,6 +249,12 @@ function loadReplyLink( $, mw ) {
      * Inserts fullReply on the next sensible line after strIdx in
      * sectionWikitext. indentLvl is the indentation level of the
      * comment we're replying to.
+     *
+     * This function essentially takes the indentation level and
+     * position of the current comment, and looks for the first comment
+     * that's indented strictly less than the current one. Then, it
+     * puts the reply on the line right before that comment, and returns
+     * the modified section wikitext.
      */
     function insertTextAfterIdx( sectionWikitext, strIdx, indentLvl, fullReply ) {
 
@@ -252,27 +273,65 @@ function loadReplyLink( $, mw ) {
         var candidateLines = slicedSecWikitext.split( "\n" );
         //console.log( "candidateLines =", candidateLines );
         var replyLine = 0; // line number in sectionWikitext after reply
+        var INDENT_RE = /^[:\*]+/;
         if( slicedSecWikitext.trim().length > 0 ) {
-            var currIndentation, currIndentationLvl;
+            var currIndentation, currIndentationLvl, i;
 
             // Now, loop through all the comments replying to that
             // one and place our reply after the last one
-            for( var i = 0; i < candidateLines.length; i++ ) {
+            for( i = 0; i < candidateLines.length; i++ ) {
                 if( candidateLines[i].trim() === "" ) {
-                    //console.log("hark a skip");
                     continue;
                 }
 
                 // Detect indentation level of current line
-                currIndentation = /^[:\*]+/.exec( candidateLines[i] );
+                currIndentation = INDENT_RE.exec( candidateLines[i] );
                 currIndentationLvl = currIndentation ? currIndentation[0].length : 0;
                 console.log(">" + candidateLines[i] + "< => " + currIndentationLvl);
 
                 if( currIndentationLvl <= indentLvl ) {
+                    if( xfdType ) {
+
+                        // If it's an XfD, we might have found a relist
+                        // comment instead, so loop for that
+                        var NEW_COMMENTS_RE = /Please add new comments below this line/;
+                        if( /<div class="xfd_relist"/.test( candidateLines[i] ) ) {
+
+                            // Our reply might go on the line above the xfd_relist line
+                            var potentialReplyLine = i;
+
+                            // Walk through the relist notice, line by line
+                            while( !NEW_COMMENTS_RE.test( candidateLines[i] ) ) {
+                                i++;
+                            }
+
+                            // Now, because we're never going to place a comment right
+                            // after a relist notice, we must check the line right
+                            // after the relist notice, and if it's not indented enough,
+                            // place our new comment *before* the relist notice.
+                            var otherCheckIndent = INDENT_RE.exec( candidateLines[i+1] );
+                            var otherCheckIndentLvl = otherCheckIndent ? otherCheckIndent[0].length : 0;
+                            if( otherCheckIndentLvl <= indentLvl ) {
+
+                                // The line right after the relist notice wasn't indented
+                                replyLine = potentialReplyLine;
+                                break;
+                            }
+
+                            // Otherwise, since we already checked the line
+                            // after the relist notice, skip to the line after
+                            // that
+                            i++;
+                            continue;
+                        }
+                    }
+
+                    // There was no relist comment, so we're done
                     break;
-                } else {
-                    replyLine = i + 1;
                 }
+            }
+            if( i === candidateLines.length ) {
+                replyLine = i;
             }
         } else {
 
