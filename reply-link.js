@@ -462,6 +462,9 @@ function loadReplyLink( $, mw ) {
                     summary: summary,
                     text: newWikitext
                 } ).done ( function ( data ) {
+
+                    // We put this function on the window object because we
+                    // give the user a "reload" link, and it'll trigger the function
                     window.replyLinkReload = function () {
                         window.location.hash = header[1].replace( / /g, "_" );
                         window.location.reload( true );
@@ -470,14 +473,24 @@ function loadReplyLink( $, mw ) {
                         var reloadHtml = window.replyLinkAutoReload ? "automatically reloading"
                             : "<a href='javascript:window.replyLinkReload()' class='reply-link-reload'>Reload</a>";
                         setStatus( "Reply saved! (" + reloadHtml + ")" );
+                        if( window.replyLinkAutoReload ) {
+                            window.replyLinkReload();
+                        }
                     } else {
-                        setStatus( "While saving, the edit query returned an error. =(" );
+                        if( data && data.edit && data.edit.spamblacklist ) {
+                            setStatus( "Error! Your post contained a link on the <a href=" +
+                                "\"https://en.wikipedia.org/wiki/Wikipedia:Spam_blacklist\"" +
+                                ">spam blacklist</a>. Remove the link(s) to: " +
+                                data.edit.spamblacklist.split( "|" ).join( ", " ) + " to allow saving." );
+                            document.querySelector( "#reply-dialog-button" ).disabled = false;
+                            document.querySelector( "#reply-link-cancel-button" ).disabled = false;
+                        } else {
+                            setStatus( "While saving, the edit query returned an error." +
+                                " Check the browser console for more information." );
+                        }
                     }
                     console.log(data);
                     document.getElementById( "reply-dialog-field" ).style["background-image"] = "";
-                    if( window.replyLinkAutoReload ) {
-                        window.replyLinkReload();
-                    }
                 } ).fail ( function( code, result ) {
                     setStatus( "While saving, the AJAX request failed." );
                     console.log(code);
@@ -583,6 +596,7 @@ function loadReplyLink( $, mw ) {
             parent.insertBefore( panelEl, newLinkWrapper.nextSibling );
             var replyDialogField = document.getElementById( "reply-dialog-field" );
             replyDialogField.style = "padding: 0.625em; min-height: 10em; margin-bottom: 0.75em;";
+            document.getElementById( "reply-dialog-status" ).style = "display: inline-block; width: 75%";
 
             /* Commented out because I could never get it to work
             // Autofill with a recommendation if we're replying to a nom
