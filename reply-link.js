@@ -273,7 +273,7 @@ function loadReplyLink( $, mw ) {
         var candidateLines = slicedSecWikitext.split( "\n" );
         //console.log( "candidateLines =", candidateLines );
         var replyLine = 0; // line number in sectionWikitext after reply
-        var INDENT_RE = /^[:\*]+/;
+        var INDENT_RE = /^[:\*#]+/;
         if( slicedSecWikitext.trim().length > 0 ) {
             var currIndentation, currIndentationLvl, i;
 
@@ -710,10 +710,11 @@ function loadReplyLink( $, mw ) {
                     // Update global metadata dictionary
                     metadata[linkId] = currIndentation;
                 }
-            } else if( /^(p|dl|dd|ul|li|s|span)$/.test( node.tagName.toLowerCase() ) ) {
+            } else if( /^(p|dl|dd|ul|li|s|span|ol)$/.test( node.tagName.toLowerCase() ) ) {
                 switch( node.tagName.toLowerCase() ) {
                 case "dl": newIndentSymbol = ":"; break;
                 case "ul": newIndentSymbol = "*"; break;
+                case "ol": newIndentSymbol = "#"; break;
                 default: newIndentSymbol = ""; break;
                 }
 
