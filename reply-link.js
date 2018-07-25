@@ -29,6 +29,7 @@ function loadReplyLink( $, mw ) {
      *  - "MfD" if the current page is an MfD page
      *  - "TfD" if the current page is a TfD log page
      *  - "CfD" if the current page is a CfD log page
+     *  - "FfD" if the current page is a FfD log page
      *  - "" otherwise
      *
      * This flag is initialized in onReady and used in attachLinkAfterNode
@@ -290,44 +291,30 @@ function loadReplyLink( $, mw ) {
                 console.log(">" + candidateLines[i] + "< => " + currIndentationLvl);
 
                 if( currIndentationLvl <= indentLvl ) {
-                    if( xfdType ) {
 
-                        // If it's an XfD, we might have found a relist
-                        // comment instead, so loop for that
+                    // If it's an XfD, we might have found a relist
+                    // comment instead, so check for that
+                    if( xfdType && /<div class="xfd_relist"/.test( candidateLines[i] ) ) {
+
+                        // Our reply might go on the line above the xfd_relist line
+                        var potentialReplyLine = i;
+
+                        // Walk through the relist notice, line by line
+                        // After this loop, i will point to the line on which
+                        // the notice ends
                         var NEW_COMMENTS_RE = /Please add new comments below this line/;
-                        if( /<div class="xfd_relist"/.test( candidateLines[i] ) ) {
-
-                            // Our reply might go on the line above the xfd_relist line
-                            var potentialReplyLine = i;
-
-                            // Walk through the relist notice, line by line
-                            while( !NEW_COMMENTS_RE.test( candidateLines[i] ) ) {
-                                i++;
-                            }
-
-                            // Now, because we're never going to place a comment right
-                            // after a relist notice, we must check the line right
-                            // after the relist notice, and if it's not indented enough,
-                            // place our new comment *before* the relist notice.
-                            var otherCheckIndent = INDENT_RE.exec( candidateLines[i+1] );
-                            var otherCheckIndentLvl = otherCheckIndent ? otherCheckIndent[0].length : 0;
-                            if( otherCheckIndentLvl <= indentLvl ) {
-
-                                // The line right after the relist notice wasn't indented
-                                replyLine = potentialReplyLine;
-                                break;
-                            }
-
-                            // Otherwise, since we already checked the line
-                            // after the relist notice, skip to the line after
-                            // that
+                        while( !NEW_COMMENTS_RE.test( candidateLines[i] ) ) {
                             i++;
-                            continue;
                         }
-                    }
 
-                    // There was no relist comment, so we're done
-                    break;
+                        // Relists are treated as if they're indented at level 1
+                        if( 1 <= indentLvl ) {
+                            replyLine = potentialReplyLine;
+                            break;
+                        }
+                    } else {
+                        break;
+                    }
                 }
             }
             if( i === candidateLines.length ) {
@@ -528,7 +515,7 @@ function loadReplyLink( $, mw ) {
 
             // If the comment is non-indented, we are replying to a nom
             rplyToXfdNom = !anyIndentation;
-        } else if( xfdType === "TfD" ) {
+        } else if( xfdType === "TfD" || xfdType === "FfD" ) {
 
             // If the sibling before the previous sibling of this node
             // is a h4, then this is a nom
@@ -795,6 +782,8 @@ function loadReplyLink( $, mw ) {
                 xfdType = "TfD";
             } else if( pageName.startsWith( "Wikipedia:Categories_for_discussion/Log/" ) ) {
                 xfdType = "CfD";
+            } else if( pageName.startsWith( "Wikipedia:Files_for_discussion/" ) ) {
+                xfdType = "FfD";
             }
         }
 
@@ -808,7 +797,7 @@ function loadReplyLink( $, mw ) {
     var currNamespace = mw.config.get( "wgNamespaceNumber" );
     if ( currNamespace % 2 === 1 || currNamespace === 4 ) {
         mw.loader.load( "mediawiki.ui.input", "text/css" );
-        mw.loader.using( [ "mediawiki.util", "mediawiki.api.edit" ] ).then( function () {
+        mw.loader.using( [ "mediawiki.util", "mediawiki.api" ] ).then( function () {
             mw.hook( "wikipage.content" ).add( onReady );
         } );
     }
