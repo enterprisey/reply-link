@@ -2,3 +2,5 @@
 .eslintcache
 node_modules/
 tags
+*.pem
+serve_https.py
