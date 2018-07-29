@@ -229,7 +229,6 @@ function loadReplyLink( $, mw ) {
                 console.log("[sigIdxToStrIdx] out of matches");
                 return -1;
             }
-            //console.log("sig match (matchIdx = " + matchIdx + ") is (first 100 chars)>" + match[0].substring(0, 100) + "< (index = " + match.index + ")");
             console.log( "sig match (matchIdx = " + matchIdx + ") is >" + match[0] + "< (index = " + match.index + ")" );
 
             matchIdxEnd = match.index + match[0].length;
@@ -271,11 +270,6 @@ function loadReplyLink( $, mw ) {
      */
     function insertTextAfterIdx( sectionWikitext, strIdx, indentLvl, fullReply ) {
         //console.log( "[insertTextAfterIdx] indentLvl = " + indentLvl );
-
-        // Sanity check strIdx
-        if( strIdx < 0 ) {
-            throw ( "Illegal strIdx in insertTextAfterIdx! strIdx = " + strIdx );
-        }
 
         // strIdx should point to the end of a line
         var counter = 0;
@@ -407,10 +401,15 @@ function loadReplyLink( $, mw ) {
                     reply += " " + ( window.replyLinkSigPrefix ? window.replyLinkSigPrefix : "" ) + SIGNATURE;
                 }
 
-                var ourIndentation = rplyToXfdNom ? "* " : ":";
-                var fullReply = reply.split( "\n" ).map( function ( line ) {
-                    return indentation + ourIndentation + line;
-                } ).join( "\n" );
+                var replyLines = reply.split( "\n" );
+                var fullReply;
+                if( rplyToXfdNom ) {
+                    fullReply = indentation + "*" + replyLines.join( "{{pb}}" );
+                } else {
+                    fullReply = replyLines.map( function ( line ) {
+                        return indentation + "* " + line;
+                    } ).join( "\n" );
+                }
 
                 // Extract wikitext of just the section
                 console.log( "in doReply, header =", header );
@@ -419,6 +418,11 @@ function loadReplyLink( $, mw ) {
 
                 // Now, obtain the index of the end of the comment
                 var strIdx = sigIdxToStrIdx( sectionWikitext, sigIdx );
+
+                // Check for a non-negative strIdx
+                if( strIdx < 0 ) {
+                    throw( "Negative strIdx (signature not found in wikitext)" );
+                }
 
                 // Determine the user who wrote the comment, for
                 // edit-summary purposes
