@@ -202,7 +202,19 @@ function loadReplyLink( $, mw ) {
         } while( skipRegionMatch );
         console.log(spanStartIndices,spanLengths);
 
-        var SIG_REGEX = /(?:\[\[\s*(?:[Uu]ser|Special:Contributions\/).*\]\].*?\d\d:\d\d,\s\d{1,2}\s\w+?\s\d\d\d\d\s\(UTC\)|class\s*=\s*"autosigned".+?\(UTC\)<\/small>)(?:\S|\s*<!--.+?-->)*?$/gm;
+        /*
+         * I apologize for making you have to read this regex
+         * I made a summary, though:
+         *
+         *  - a wikilink, without a ]] inside it
+         *  - some text, without a link to userspace or user talk space
+         *  - a timestamp
+         *  - as an alternative to all of the above, an autosigned script
+         *    and a timestamp
+         *  - some comments/whitespace or some non-whitespace
+         *  - finally, the end of the line
+         */
+        var SIG_REGEX = /(?:\[\[\s*(([Uu]ser(\s+talk)?|Special:Contributions\/)([^\]]||\](?!\]))*?)\]\]\)?([^\[]|\[(?!\[)|\[\[(?!User(\s+talk)?:))*?\d\d:\d\d,\s\d{1,2}\s\w+?\s\d\d\d\d\s\(UTC\)|class\s*=\s*"autosigned".+?\(UTC\)<\/small>)(([ \t\f]|<!--.*?-->)*(?!\S)|\S+([ \t\f]|<!--.*?-->)*)?$/gm;
         var matchIdx = 0;
         var match;
         var matchIdxEnd;
@@ -218,7 +230,7 @@ function loadReplyLink( $, mw ) {
                 return -1;
             }
             //console.log("sig match (matchIdx = " + matchIdx + ") is (first 100 chars)>" + match[0].substring(0, 100) + "< (index = " + match.index + ")");
-            console.log("sig match (matchIdx = " + matchIdx + ") is >" + match[0] + "< (index = " + match.index + ")");
+            console.log( "sig match (matchIdx = " + matchIdx + ") is >" + match[0] + "< (index = " + match.index + ")" );
 
             matchIdxEnd = match.index + match[0].length;
 
@@ -258,6 +270,7 @@ function loadReplyLink( $, mw ) {
      * the modified section wikitext.
      */
     function insertTextAfterIdx( sectionWikitext, strIdx, indentLvl, fullReply ) {
+        //console.log( "[insertTextAfterIdx] indentLvl = " + indentLvl );
 
         // Sanity check strIdx
         if( strIdx < 0 ) {
@@ -428,6 +441,7 @@ function loadReplyLink( $, mw ) {
                 if( window.replyLinkDryRun ) {
                     console.log( "~~~~~~ DRY RUN CONCLUDED ~~~~~~" );
                     console.log( sectionWikitext );
+                    setStatus( "Check the console for the dry-run results." );
                     return;
                 }
 
@@ -689,7 +703,14 @@ function loadReplyLink( $, mw ) {
                     isLocalCommentsSpan )  {
 
                 // If the current node has a timestamp, attach a link to it
-                if( TIMESTAMP_REGEX.test( node.textContent.trim() ) ) {
+                // Also, no links after timestamps, because it's just like
+                // having normal text afterwards, which is banned (because
+                // that means someone put a timestamp in the middle of a
+                // paragraph)
+                if( TIMESTAMP_REGEX.test( node.textContent.trim() ) &&
+                        ( !node.nextElementSibling ||
+                            node.nextElementSibling.tagName.toLowerCase() !==
+                            "a" ) ) {
                     linkId = "reply-link-" + idNum;
                     attachLinkAfterNode( node, linkId, !!currIndentation );
                     idNum++;
