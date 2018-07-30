@@ -4,7 +4,7 @@ function loadReplyLink( $, mw ) {
     var SIGNATURE = "~~" + "~~"; // split up because it might get processed
 
     /**
-     * This dictionary is some global state that holds four pieces of
+     * This dictionary is some global state that holds three pieces of
      * information for each "(reply)" link (keyed by their unique IDs):
      *
      *  - the indentation string for the comment (e.g. ":*::")
@@ -548,12 +548,14 @@ function loadReplyLink( $, mw ) {
                     console.log(data);
                     document.getElementById( "reply-dialog-field" ).style["background-image"] = "";
                 } ).fail ( function( code, result ) {
-                    setStatus( "While saving, the AJAX request failed." );
+                    setStatus( "While replying, the edit failed." );
                     console.log(code);
                     console.log(result);
                 } );
             } catch ( e ) {
-                setStatus( "There was an error while replying!" );
+                setStatus( "There was an error while replying! Please leave a note at " +
+                    "<a href='https://en.wikipedia.org/wiki/User_talk:Enterprisey/reply-link'>the script's talk page</a>" +
+                    " with any errors in the browser console, if possible." );
                 console.log( "Content request error: " + JSON.stringify( e.message ) );
                 //console.log( "Content request response: " + JSON.stringify( data ) );
                 throw e;
