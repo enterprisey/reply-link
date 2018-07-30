@@ -15,8 +15,6 @@ function loadReplyLink( $, mw ) {
      *      - number is the zero-based index of the heading from the top
      *  - sigIdx, or the zero-based index of the signature from the top
      *    of the section
-     *  - cmtAuthor, or the username associated with the signature, for
-     *    error checking
      *
      * This dictionary is populated in attachLinks, and unpacked in the
      * click handler for the links (defined in attachLinkAfterNode); the
@@ -37,6 +35,13 @@ function loadReplyLink( $, mw ) {
      * This flag is initialized in onReady and used in attachLinkAfterNode
      */
     var xfdType;
+
+    /**
+     * The current page name, including namespace, because we may be reading it
+     * a lot (especially in findUsernameInElem if we're on someone's user
+     * talk page)
+     */
+    var currentPageName;
 
     /**
      * This function converts any (index-able) iterable into a list.
@@ -90,18 +95,30 @@ function loadReplyLink( $, mw ) {
      */
     function findUsernameInElem( el ) {
         if( !el ) return null;
-        var link = el.tagName.toLowerCase() === "a" ? el
-            : el.querySelector( "a" );
-        if( link === null ) return null;
+        var links = el.tagName.toLowerCase() === "a" ? [ el ]
+            : el.querySelectorAll( "a" );
+        if( !links ) return null;
 
-        // Also matches redlinks. Why people have redlinks in their sigs on
-        // purpose, I may never know.
-        var usernameMatch =
-            /^\/(?:wiki\/(?:User(?:_talk)?:|Special:Contributions\/)(.+?)(?:\/.+?)?(?:#.+)?|w\/index\.php\?title=User(?:_talk)?:(.+?)&action=edit&redlink=1)?$/
-            .exec( link.getAttribute( "href" ) );
-        return usernameMatch === null ? null :
-            decodeURIComponent( usernameMatch[1] ? usernameMatch[1]
-                : usernameMatch[2] );
+        var link; // his name isn't zelda
+        for( var i = 0; i < links.length; i++ ) {
+            link = links[i];
+
+            if( link.className.indexOf( "mw-selflink" ) >= 0 ) {
+                return currentPageName.replace( "User_talk:", "" )
+                    .replace( /_/g, " " );
+            }
+
+            // Also matches redlinks. Why people have redlinks in their sigs on
+            // purpose, I may never know.
+            var usernameMatch =
+                /^\/(?:wiki\/(?:User(?:_talk)?:|Special:Contributions\/)(.+?)(?:\/.+?)?(?:#.+)?|w\/index\.php\?title=User(?:_talk)?:(.+?)&action=edit&redlink=1)?$/
+                .exec( link.getAttribute( "href" ) );
+            if( usernameMatch ) {
+                return decodeURIComponent( usernameMatch[1] ? usernameMatch[1]
+                    : usernameMatch[2] ).replace( /_/g, " " );
+            }
+        }
+        return null;
     }
 
     /**
@@ -145,7 +162,7 @@ function loadReplyLink( $, mw ) {
         do {
             headerMatch = HEADER_RE.exec( wikitext );
             if( headerMatch ) {
-                console.log("Header " + headerCounter + " (idx " + headerMatch.index + "): >" + headerMatch[0] + "<");
+                console.log("Header " + headerCounter + " (idx " + headerMatch.index + "): >" + headerMatch[0].trim() + "<");
                 if( headerCounter === sectionIdx ) {
                     if( wikitextToTextContent( headerMatch[2] ) !== sectionName ) {
                         throw( "Sanity check on header name failed! Found \"" +
@@ -427,10 +444,10 @@ function loadReplyLink( $, mw ) {
                 var replyLines = reply.split( "\n" );
                 var fullReply;
                 if( rplyToXfdNom ) {
-                    fullReply = indentation + "*" + replyLines.join( "{{pb}}" );
+                    fullReply = indentation + "* " + replyLines.join( "{{pb}}" );
                 } else {
                     fullReply = replyLines.map( function ( line ) {
-                        return indentation + "* " + line;
+                        return indentation + ":" + line;
                     } ).join( "\n" );
                 }
 
@@ -455,8 +472,12 @@ function loadReplyLink( $, mw ) {
                             .match( userRgx );
                     var commentingUser = userRgx.exec(
                             userMatches[userMatches.length - 1] )[1];
+
+                    // Normalize case
+                    commentingUser = commentingUser.charAt( 0 ).toUpperCase() +
+                        commentingUser.substr( 1 );
                 } catch( e ) {
-                     // No big deal, we'll just not have a user in the summary
+                    // No big deal, we'll just not have a user in the summary
                 }
 
                 // Sanity check: is the sig username the same as the DOM one?
@@ -631,7 +652,7 @@ function loadReplyLink( $, mw ) {
             parent.insertBefore( panelEl, newLinkWrapper.nextSibling );
             var replyDialogField = document.getElementById( "reply-dialog-field" );
             replyDialogField.style = "padding: 0.625em; min-height: 10em; margin-bottom: 0.75em;";
-            document.getElementById( "reply-dialog-status" ).style = "display: inline-block; width: 75%";
+            document.getElementById( "reply-dialog-status" ).style = "display: inline-block;";
 
             /* Commented out because I could never get it to work
             // Autofill with a recommendation if we're replying to a nom
@@ -655,11 +676,21 @@ function loadReplyLink( $, mw ) {
             document.getElementById( "reply-dialog-button" )
                 .addEventListener( "click", function () {
 
+                    // Figure out the username of the author
+                    // of the comment we're replying to
+                    var sigNode = this.parentNode.previousElementSibling;
+                    var possUserLinkElem = ( sigNode.nodeType === 1 && 
+                        sigNode.tagName.toLowerCase() === "small" )
+                        ? sigNode.children[sigNode.children.length-1]
+                        : sigNode.previousElementSibling;
+                    var cmtAuthor = findUsernameInElem( possUserLinkElem );
+                    console.log(possUserLinkElem);
+
                     // ourMetadata contains data in the format:
                     // [indentation, header, sigIdx, cmtAuthor]
                     doReply( ourMetadata[0], ourMetadata[1], ourMetadata[2],
-                        ourMetadata[3], rplyToXfdNom );
-                }.bind( this ) );
+                        cmtAuthor, rplyToXfdNom );
+                } );
 
             // Link cancel button event listener
             document.getElementById( "reply-link-cancel-button" )
@@ -718,7 +749,6 @@ function loadReplyLink( $, mw ) {
         var stackEl; // current element from the parse stack
         var idNum = 0; // used to make id's for the links
         var linkId = ""; // will be the element id for this link
-        var possibleUserLinkElem; // might have a link with the username
         while( parseStack.length ) {
             stackEl = parseStack.pop();
             node = stackEl[1];
@@ -747,17 +777,11 @@ function loadReplyLink( $, mw ) {
                         ( !node.nextElementSibling ||
                             node.nextElementSibling.tagName.toLowerCase() !== "a" ) ) {
                     linkId = "reply-link-" + idNum;
-                    possibleUserLinkElem = ( node.nodeType === 1 && 
-                        node.tagName.toLowerCase() === "small" )
-                        ? node.children[node.children.length-1]
-                        : node.previousElementSibling;
-                    attachLinkAfterNode( node, linkId, !!currIndentation,
-                        findUsernameInElem( possibleUserLinkElem ) );
+                    attachLinkAfterNode( node, linkId, !!currIndentation );
                     idNum++;
 
                     // Update global metadata dictionary
-                    metadata[linkId] = [ currIndentation,
-                        findUsernameInElem( possibleUserLinkElem ) ];
+                    metadata[linkId] = currIndentation;
                 }
             } else if( /^(p|dl|dd|ul|li|s|span|ol)$/.test( node.tagName.toLowerCase() ) ) {
                 switch( node.tagName.toLowerCase() ) {
@@ -777,7 +801,7 @@ function loadReplyLink( $, mw ) {
         // the header data, and the sigIdx values
         var sigIdxEls = iterableToList( mainContent.querySelectorAll(
                 "h2,h3,h4,h5,h6,span.reply-link-wrapper a" ) );
-        var currSigIdx = 0, j, numSigIdxEls, currHeaderEl, currHeaderData, currMetadata;
+        var currSigIdx = 0, j, numSigIdxEls, currHeaderEl, currHeaderData;
         var headerIdx = 0; // index of the current header
         var headerLvl = 0; // level of the current header
         for( j = 0, numSigIdxEls = sigIdxEls.length; j < numSigIdxEls; j++ ) {
@@ -818,9 +842,9 @@ function loadReplyLink( $, mw ) {
 
                 // Save all the metadata for this link
                 // currMetadata is [ currIndentation, username ]
-                currMetadata = metadata[ sigIdxEls[j].id ];
-                metadata[ sigIdxEls[j].id ] = [ currMetadata[0],
-                    currHeaderData.slice(0), currSigIdx, currMetadata[1] ];
+                currIndentation = metadata[ sigIdxEls[j].id ];
+                metadata[ sigIdxEls[j].id ] = [ currIndentation,
+                    currHeaderData.slice(0), currSigIdx ];
                 currSigIdx++;
             }
         }
@@ -835,18 +859,18 @@ function loadReplyLink( $, mw ) {
 
         // Initialize the xfdType global variable, which must happen
         // before the call to attachLinks
-        var pageName = mw.config.get( "wgPageName" );
+        currentPageName = mw.config.get( "wgPageName" );
         xfdType = "";
         if( mw.config.get( "wgNamespaceNumber" ) === 4) {
-            if( pageName.startsWith( "Wikipedia:Articles_for_deletion/" ) ) {
+            if( currentPageName.startsWith( "Wikipedia:Articles_for_deletion/" ) ) {
                 xfdType = "AfD";
-            } else if( pageName.startsWith( "Wikipedia:Miscellany_for_deletion/" ) ) {
+            } else if( currentPageName.startsWith( "Wikipedia:Miscellany_for_deletion/" ) ) {
                 xfdType = "MfD";
-            } else if( pageName.startsWith( "Wikipedia:Templates_for_discussion/Log/" ) ) {
+            } else if( currentPageName.startsWith( "Wikipedia:Templates_for_discussion/Log/" ) ) {
                 xfdType = "TfD";
-            } else if( pageName.startsWith( "Wikipedia:Categories_for_discussion/Log/" ) ) {
+            } else if( currentPageName.startsWith( "Wikipedia:Categories_for_discussion/Log/" ) ) {
                 xfdType = "CfD";
-            } else if( pageName.startsWith( "Wikipedia:Files_for_discussion/" ) ) {
+            } else if( currentPageName.startsWith( "Wikipedia:Files_for_discussion/" ) ) {
                 xfdType = "FfD";
             }
         }
