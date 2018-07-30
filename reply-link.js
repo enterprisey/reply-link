@@ -4,9 +4,8 @@ function loadReplyLink( $, mw ) {
     var SIGNATURE = "~~" + "~~"; // split up because it might get processed
 
     /**
-     * This dictionary is some global state that holds three pieces of
-     * information for each "(reply)" link (represented by their unique
-     * IDs):
+     * This dictionary is some global state that holds four pieces of
+     * information for each "(reply)" link (keyed by their unique IDs):
      *
      *  - the indentation string for the comment (e.g. ":*::")
      *  - the header tuple for the parent section, in the form of
@@ -16,9 +15,12 @@ function loadReplyLink( $, mw ) {
      *      - number is the zero-based index of the heading from the top
      *  - sigIdx, or the zero-based index of the signature from the top
      *    of the section
+     *  - cmtAuthor, or the username associated with the signature, for
+     *    error checking
      *
-     * This dictionary is populated in attachLinks and used in the click
-     * handler for the links, which is defined in attachLinkAfterNode.
+     * This dictionary is populated in attachLinks, and unpacked in the
+     * click handler for the links (defined in attachLinkAfterNode); the
+     * values are then passed to doReply.
      */
     var metadata = {};
 
@@ -80,6 +82,26 @@ function loadReplyLink( $, mw ) {
      */
     function wikitextToTextContent( wikitext ) {
         return wikitext.replace( /\[\[:?(?:[^\|]+?\|)?([^\]\|]+?)\]\]/g, "$1" );
+    }
+
+    /**
+     * Given an Element object, attempt to recover a username from it.
+     * Returns null if no username was found.
+     */
+    function findUsernameInElem( el ) {
+        if( !el ) return null;
+        var link = el.tagName.toLowerCase() === "a" ? el
+            : el.querySelector( "a" );
+        if( link === null ) return null;
+
+        // Also matches redlinks. Why people have redlinks in their sigs on
+        // purpose, I may never know.
+        var usernameMatch =
+            /^\/(?:wiki\/(?:User(?:_talk)?:|Special:Contributions\/)(.+?)(?:\/.+?)?(?:#.+)?|w\/index\.php\?title=User(?:_talk)?:(.+?)&action=edit&redlink=1)?$/
+            .exec( link.getAttribute( "href" ) );
+        return usernameMatch === null ? null :
+            decodeURIComponent( usernameMatch[1] ? usernameMatch[1]
+                : usernameMatch[2] );
     }
 
     /**
@@ -363,9 +385,10 @@ function loadReplyLink( $, mw ) {
     /**
      * Using the text in #reply-dialog-field, add a reply to the
      * current page. rplyToXfdNom is true if we're replying to an XfD nom,
-     * in which case we should use an asterisk instead of a colon.
+     * in which case we should use an asterisk instead of a colon. cmtAuthor
+     * is the username of the person who wrote the comment we're replying to.
      */
-    function doReply( sigIdx, indentation, header, rplyToXfdNom ) {
+    function doReply( indentation, header, sigIdx, cmtAuthor, rplyToXfdNom ) {
         var wikitext;
 
         // Change UI to make it clear we're performing an operation
@@ -434,6 +457,13 @@ function loadReplyLink( $, mw ) {
                             userMatches[userMatches.length - 1] )[1];
                 } catch( e ) {
                      // No big deal, we'll just not have a user in the summary
+                }
+
+                // Sanity check: is the sig username the same as the DOM one?
+                if( commentingUser !== cmtAuthor ) {
+                    throw( "Sanity check on sig username failed! Found " +
+                        commentingUser + " but expected " + cmtAuthor +
+                        " (wikitext vs DOM)" );
                 }
 
                 // Actually insert our reply into the section wikitext
@@ -626,8 +656,9 @@ function loadReplyLink( $, mw ) {
                 .addEventListener( "click", function () {
 
                     // ourMetadata contains data in the format:
-                    // [indentation, header, sigIdx]
-                    doReply( ourMetadata[2], ourMetadata[0], ourMetadata[1], rplyToXfdNom );
+                    // [indentation, header, sigIdx, cmtAuthor]
+                    doReply( ourMetadata[0], ourMetadata[1], ourMetadata[2],
+                        ourMetadata[3], rplyToXfdNom );
                 }.bind( this ) );
 
             // Link cancel button event listener
@@ -687,6 +718,7 @@ function loadReplyLink( $, mw ) {
         var stackEl; // current element from the parse stack
         var idNum = 0; // used to make id's for the links
         var linkId = ""; // will be the element id for this link
+        var possibleUserLinkElem; // might have a link with the username
         while( parseStack.length ) {
             stackEl = parseStack.pop();
             node = stackEl[1];
@@ -708,19 +740,24 @@ function loadReplyLink( $, mw ) {
 
                 // If the current node has a timestamp, attach a link to it
                 // Also, no links after timestamps, because it's just like
-                // having normal text afterwards, which is banned (because
+                // having normal text afterwards, which is rejected (because
                 // that means someone put a timestamp in the middle of a
                 // paragraph)
                 if( TIMESTAMP_REGEX.test( node.textContent.trim() ) &&
                         ( !node.nextElementSibling ||
-                            node.nextElementSibling.tagName.toLowerCase() !==
-                            "a" ) ) {
+                            node.nextElementSibling.tagName.toLowerCase() !== "a" ) ) {
                     linkId = "reply-link-" + idNum;
-                    attachLinkAfterNode( node, linkId, !!currIndentation );
+                    possibleUserLinkElem = ( node.nodeType === 1 && 
+                        node.tagName.toLowerCase() === "small" )
+                        ? node.children[node.children.length-1]
+                        : node.previousElementSibling;
+                    attachLinkAfterNode( node, linkId, !!currIndentation,
+                        findUsernameInElem( possibleUserLinkElem ) );
                     idNum++;
 
                     // Update global metadata dictionary
-                    metadata[linkId] = currIndentation;
+                    metadata[linkId] = [ currIndentation,
+                        findUsernameInElem( possibleUserLinkElem ) ];
                 }
             } else if( /^(p|dl|dd|ul|li|s|span|ol)$/.test( node.tagName.toLowerCase() ) ) {
                 switch( node.tagName.toLowerCase() ) {
@@ -736,16 +773,16 @@ function loadReplyLink( $, mw ) {
             }
         }
 
-        // This loop puts two entries in the metadata dictionary:
+        // This loop adds two entries in the metadata dictionary:
         // the header data, and the sigIdx values
         var sigIdxEls = iterableToList( mainContent.querySelectorAll(
                 "h2,h3,h4,h5,h6,span.reply-link-wrapper a" ) );
-        var currSigIdx = 0, j, numSigIdxEls, currHeaderEl, currHeaderData;
+        var currSigIdx = 0, j, numSigIdxEls, currHeaderEl, currHeaderData, currMetadata;
         var headerIdx = 0; // index of the current header
         var headerLvl = 0; // level of the current header
         for( j = 0, numSigIdxEls = sigIdxEls.length; j < numSigIdxEls; j++ ) {
-            var headerTagNameMatch = /h(\d+)/
-                .exec( sigIdxEls[j].tagName.toLowerCase() );
+            var headerTagNameMatch = /h(\d+)/.exec( 
+                sigIdxEls[j].tagName.toLowerCase() );
             if( headerTagNameMatch ) {
                 currHeaderEl = sigIdxEls[j];
 
@@ -780,12 +817,14 @@ function loadReplyLink( $, mw ) {
             } else {
 
                 // Save all the metadata for this link
-                currIndentation = metadata[ sigIdxEls[j].id ];
-                metadata[ sigIdxEls[j].id ] = [ currIndentation,
-                    currHeaderData.slice(0), currSigIdx ];
+                // currMetadata is [ currIndentation, username ]
+                currMetadata = metadata[ sigIdxEls[j].id ];
+                metadata[ sigIdxEls[j].id ] = [ currMetadata[0],
+                    currHeaderData.slice(0), currSigIdx, currMetadata[1] ];
                 currSigIdx++;
             }
         }
+        //console.log(metadata);
     }
 
     function onReady () {
