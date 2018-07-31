@@ -822,14 +822,24 @@ function loadReplyLink( $, mw ) {
 
                 // Dig down one level for the header text because
                 // MW buries the text in a span inside the header
-                var headerName = null;
-                for( var i = 0; i < currHeaderEl.childNodes.length; i++ ) {
-                    if( currHeaderEl.childNodes[i].className &&
-                            currHeaderEl.childNodes[i].className
-                            .indexOf( "mw-headline" ) >= 0 ) {
-                        headerName = currHeaderEl.childNodes[i].textContent;
-                        break;
+                var headlineEl = null;
+                if( currHeaderEl.childNodes[0].className &&
+                    currHeaderEl.childNodes[0].className.indexOf( "mw-headline" ) >= 0 ) {
+                    headlineEl = currHeaderEl.childNodes[0];
+                } else {
+                    for( var i = 0; i < currHeaderEl.childNodes.length; i++ ) {
+                        if( currHeaderEl.childNodes[i].className &&
+                                currHeaderEl.childNodes[i].className
+                                .indexOf( "mw-headline" ) >= 0 ) {
+                            headlineEl = currHeaderEl.childNodes[i];
+                            break;
+                        }
                     }
+                }
+
+                var headerName = null;
+                if( headlineEl ) {
+                    headerName = headlineEl.childNodes[0].textContent;
                 }
 
                 if( headerName === null ) {
