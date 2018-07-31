@@ -100,32 +100,39 @@ function loadReplyLink( $, mw ) {
 
     /**
      * Given an Element object, attempt to recover a username from it.
+     * Also will check up to two elements prior to the passed element.
      * Returns null if no username was found.
      */
     function findUsernameInElem( el ) {
         if( !el ) return null;
-        var links = el.tagName.toLowerCase() === "a" ? [ el ]
-            : el.querySelectorAll( "a" );
-        if( !links ) return null;
+        var links;
+        for( let i = 0; i < 3; i++ ) {
+            links = el.tagName.toLowerCase() === "a" ? [ el ]
+                : el.querySelectorAll( "a" );
+            if( !links ) continue;
 
-        var link; // his name isn't zelda
-        for( var i = 0; i < links.length; i++ ) {
-            link = links[i];
+            var link; // his name isn't zelda
+            for( var j = 0; j < links.length; j++ ) {
+                link = links[j];
 
-            if( link.className.indexOf( "mw-selflink" ) >= 0 ) {
-                return currentPageName.replace( "User_talk:", "" )
-                    .replace( /_/g, " " );
+                if( link.className.indexOf( "mw-selflink" ) >= 0 ) {
+                    return currentPageName.replace( "User_talk:", "" )
+                        .replace( /_/g, " " );
+                }
+
+                // Also matches redlinks. Why people have redlinks in their sigs on
+                // purpose, I may never know.
+                var usernameMatch =
+                    /^\/(?:wiki\/(?:User(?:_talk)?:|Special:Contributions\/)(.+?)(?:\/.+?)?(?:#.+)?|w\/index\.php\?title=User(?:_talk)?:(.+?)&action=edit&redlink=1)?$/
+                    .exec( link.getAttribute( "href" ) );
+                if( usernameMatch ) {
+                    return decodeURIComponent( usernameMatch[1] ? usernameMatch[1]
+                        : usernameMatch[2] ).replace( /_/g, " " );
+                }
             }
 
-            // Also matches redlinks. Why people have redlinks in their sigs on
-            // purpose, I may never know.
-            var usernameMatch =
-                /^\/(?:wiki\/(?:User(?:_talk)?:|Special:Contributions\/)(.+?)(?:\/.+?)?(?:#.+)?|w\/index\.php\?title=User(?:_talk)?:(.+?)&action=edit&redlink=1)?$/
-                .exec( link.getAttribute( "href" ) );
-            if( usernameMatch ) {
-                return decodeURIComponent( usernameMatch[1] ? usernameMatch[1]
-                    : usernameMatch[2] ).replace( /_/g, " " );
-            }
+            // Go backwards one element and try again
+            el = el.previousElementSibling;
         }
         return null;
     }
