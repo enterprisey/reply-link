@@ -44,6 +44,15 @@ function loadReplyLink( $, mw ) {
     var currentPageName;
 
     /**
+     * A boolean flag, true if the script User:Bility/copySectionLink has
+     * run on this page. It's initialized in onReady. It' true iff there's
+     * a link with an ID that's "sectiontitlecopy0" inside a
+     * span.mw-headline. It's used in the sanity check in
+     * getSectionWikitext to remove the trailing paragraph symbol.
+     */
+    var copySectionLinkActive = false;
+
+    /**
      * This function converts any (index-able) iterable into a list.
      */
     function iterableToList( nl ) {
@@ -164,9 +173,10 @@ function loadReplyLink( $, mw ) {
             if( headerMatch ) {
                 console.log("Header " + headerCounter + " (idx " + headerMatch.index + "): >" + headerMatch[0].trim() + "<");
                 if( headerCounter === sectionIdx ) {
-                    if( wikitextToTextContent( headerMatch[2] ) !== sectionName ) {
+                    var sanitizedWktxtSectionName = wikitextToTextContent( headerMatch[2] );
+                    if( sanitizedWktxtSectionName !== sectionName ) {
                         throw( "Sanity check on header name failed! Found \"" +
-                                headerMatch[2] + "\", expected \"" +
+                                sanitizedWktxtSectionName + "\", expected \"" +
                                 sectionName + "\" (wikitext vs DOM)" );
                     }
                     startIdx = headerMatch.index;
@@ -453,7 +463,14 @@ function loadReplyLink( $, mw ) {
 
                 // Extract wikitext of just the section
                 console.log( "in doReply, header =", header );
-                var sectionWikitext = getSectionWikitext( wikitext, header[2], header[1] );
+                var sectionHeader = header[1];
+                if( copySectionLinkActive ) {
+
+                    // If User:Bility/copySectionLink is active, the paragraph
+                    // symbol at the end is a fake
+                    sectionHeader = sectionHeader.replace( /\s*¶$/, "" );
+                }
+                var sectionWikitext = getSectionWikitext( wikitext, header[2], sectionHeader );
                 var oldSectionWikitext = sectionWikitext;
 
                 // Now, obtain the index of the end of the comment
@@ -794,7 +811,7 @@ function loadReplyLink( $, mw ) {
                 }
 
                 var childNodes = node.childNodes;
-                for( var i, numNodes = childNodes.length; i < numNodes; i++ ) {
+                for( let i = 0, numNodes = childNodes.length; i < numNodes; i++ ) {
                     parseStack.push( [ currIndentation + newIndentSymbol,
                         childNodes[i] ] );
                 }
@@ -841,7 +858,7 @@ function loadReplyLink( $, mw ) {
 
                 var headerName = null;
                 if( headlineEl ) {
-                    headerName = headlineEl.childNodes[0].textContent;
+                    headerName = headlineEl.textContent;
                 }
 
                 if( headerName === null ) {
@@ -888,6 +905,10 @@ function loadReplyLink( $, mw ) {
                 xfdType = "FfD";
             }
         }
+
+        // Initialize the copySectionLinkActive global variable
+        copySectionLinkActive =
+            !!document.querySelector( "span.mw-headline a#sectiontitlecopy0" );
 
         // Insert "reply" links into DOM
         attachLinks();
