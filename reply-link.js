@@ -529,7 +529,7 @@ function loadReplyLink( $, mw ) {
 
                 // Build summary
                 var postNoun = rplyToXfdNom ? xfdType + " nomination" : "comment";
-                var summary = "/* " + header[1] + " */ Replying " +
+                var summary = "/* " + sectionHeader + " */ Replying " +
                     ( commentingUser ? " to " + postNoun + " by " +
                         commentingUser + " " : "" ) +
                     "([[User:Enterprisey/reply-link|reply-link]])";
@@ -546,7 +546,7 @@ function loadReplyLink( $, mw ) {
                     // We put this function on the window object because we
                     // give the user a "reload" link, and it'll trigger the function
                     window.replyLinkReload = function () {
-                        window.location.hash = header[1].replace( / /g, "_" );
+                        window.location.hash = sectionHeader.replace( / /g, "_" );
                         window.location.reload( true );
                     };
                     if ( data && data.edit && data.edit.result && data.edit.result == "Success" ) {
@@ -809,7 +809,7 @@ function loadReplyLink( $, mw ) {
                     // Update global metadata dictionary
                     metadata[linkId] = currIndentation;
                 }
-            } else if( /^(p|dl|dd|ul|li|s|span|ol)$/.test( node.tagName.toLowerCase() ) ) {
+            } else if( /^(p|dl|dd|ul|li|span|ol)$/.test( node.tagName.toLowerCase() ) ) {
                 switch( node.tagName.toLowerCase() ) {
                 case "dl": newIndentSymbol = ":"; break;
                 case "ul": newIndentSymbol = "*"; break;
