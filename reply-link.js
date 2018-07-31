@@ -47,10 +47,22 @@ function loadReplyLink( $, mw ) {
      * A boolean flag, true if the script User:Bility/copySectionLink has
      * run on this page. It's initialized in onReady. It' true iff there's
      * a link with an ID that's "sectiontitlecopy0" inside a
-     * span.mw-headline. It's used in the sanity check in
+     * span.mw-headline. It's used in the section header sanity check in
      * getSectionWikitext to remove the trailing paragraph symbol.
      */
     var copySectionLinkActive = false;
+
+    /**
+     * A map for signatures that contain redirects, so that they can still
+     * pass the sanity check. This will be updated manually, because I
+     * don't want the overhead of a whole 'nother API call in the middle
+     * of the reply process. If this map grows too much, though, I'll
+     * consider switching to either a toolforge-hosted API or the
+     * Wikipedia API. Used in doReply, for the username sanity check.
+     */
+    var sigRedirectMapping = {
+        "Salvidrim": "Salvidrim!"
+    };
 
     /**
      * This function converts any (index-able) iterable into a list.
@@ -505,7 +517,10 @@ function loadReplyLink( $, mw ) {
                 }
 
                 // Sanity check: is the sig username the same as the DOM one?
-                if( commentingUser !== cmtAuthor ) {
+                // We attempt to check sigRedirectMapping in case the naive
+                // check fails
+                if( commentingUser !== cmtAuthor &&
+                        sigRedirectMapping[ commentingUser ] !== cmtAuthor ) {
                     throw( "Sanity check on sig username failed! Found " +
                         commentingUser + " but expected " + cmtAuthor +
                         " (wikitext vs DOM)" );
