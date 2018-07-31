@@ -793,9 +793,11 @@ function loadReplyLink( $, mw ) {
                 default: newIndentSymbol = ""; break;
                 }
 
-                iterableToList( node.childNodes ).forEach( function ( x ) {
-                    parseStack.push( [ currIndentation + newIndentSymbol, x ] );
-                } );
+                var childNodes = node.childNodes;
+                for( var i, numNodes = childNodes.length; i < numNodes; i++ ) {
+                    parseStack.push( [ currIndentation + newIndentSymbol,
+                        childNodes[i] ] );
+                }
             }
         }
 
