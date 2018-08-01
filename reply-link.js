@@ -689,7 +689,7 @@ function loadReplyLink( $, mw ) {
             panelEl.innerHTML = "<textarea id='reply-dialog-field' class='mw-ui-input' placeholder='Reply here!'></textarea>" +
                 "<div style='float:left'><button id='reply-dialog-button' class='mw-ui-button mw-ui-progressive'>Reply</button>" +
                 "<button id='reply-link-cancel-button' class='mw-ui-button mw-ui-quiet mw-ui-destructive'>Cancel</button></div>" +
-                "<span id='reply-dialog-status'></span>";
+                "<span id='reply-dialog-status'></span><div style='clear:left'></div>";
             parent.insertBefore( panelEl, newLinkWrapper.nextSibling );
             var replyDialogField = document.getElementById( "reply-dialog-field" );
             replyDialogField.style = "padding: 0.625em; min-height: 10em; margin-bottom: 0.75em;";
