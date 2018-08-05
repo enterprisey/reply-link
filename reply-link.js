@@ -107,7 +107,8 @@ function loadReplyLink( $, mw ) {
      * with the id's that anchor the headers.
      */
     function wikitextToTextContent( wikitext ) {
-        return wikitext.replace( /\[\[:?(?:[^\|]+?\|)?([^\]\|]+?)\]\]/g, "$1" );
+        return wikitext.replace( /\[\[:?(?:[^\|]+?\|)?([^\]\|]+?)\]\]/g, "$1" )
+            .replace( /\{\{\s*tl\s*\|\s*(.+?)\s*\}\}/, "{{$1}}" );
     }
 
     /**
