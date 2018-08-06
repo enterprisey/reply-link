@@ -108,7 +108,8 @@ function loadReplyLink( $, mw ) {
      */
     function wikitextToTextContent( wikitext ) {
         return wikitext.replace( /\[\[:?(?:[^\|]+?\|)?([^\]\|]+?)\]\]/g, "$1" )
-            .replace( /\{\{\s*tl\s*\|\s*(.+?)\s*\}\}/, "{{$1}}" );
+            .replace( /\{\{\s*tl\s*\|\s*(.+?)\s*\}\}/g, "{{$1}}" )
+            .replace( /('''?)(.+?)\1/g, "$2" );
     }
 
     /**
