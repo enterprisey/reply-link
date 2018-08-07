@@ -597,7 +597,9 @@ function loadReplyLink( $, mw ) {
                 setStatus( "There was an error while replying! Please leave a note at " +
                     "<a href='https://en.wikipedia.org/wiki/User_talk:Enterprisey/reply-link'>the script's talk page</a>" +
                     " with any errors in the browser console, if possible." );
-                console.log( "Content request error: " + JSON.stringify( e.message ) );
+                if( e.message ) {
+                    console.log( "Content request error: " + JSON.stringify( e.message ) );
+                }
                 //console.log( "Content request response: " + JSON.stringify( data ) );
                 throw e;
             }
