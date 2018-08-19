@@ -586,6 +586,10 @@ function loadReplyLink( $, mw ) {
                         window.location.reload( true );
                     };
                     if ( data && data.edit && data.edit.result && data.edit.result == "Success" ) {
+
+                        // User can now navigate away from the page safely
+                        window.onbeforeunload = null;
+
                         var reloadHtml = window.replyLinkAutoReload ? "automatically reloading"
                             : "<a href='javascript:window.replyLinkReload()' class='reply-link-reload'>Reload</a>";
                         setStatus( "Reply saved! (" + reloadHtml + ")" );
