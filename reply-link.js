@@ -780,6 +780,7 @@ function loadReplyLink( $, mw ) {
                 .addEventListener( "click", function () {
                     newLink.textContent = linkLabel;
                     panelEl.remove();
+                    window.onbeforeunload = null;
                 } );
 
             // Cancel default event handler
