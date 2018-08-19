@@ -734,7 +734,24 @@ function loadReplyLink( $, mw ) {
             // Fetch metadata about this specific comment
             var ourMetadata = metadata[this.id];
 
-            // Link event listener
+            // Event listener for the text area
+            document.getElementById( "reply-dialog-field" )
+                .addEventListener( "input", function () {
+
+                    // If the user has started a reply, ask for a
+                    // confirmation before closing
+                    if( this.value && !window.onbeforeunload ) {
+                        window.onbeforeunload = function ( e ) {
+                            var txt = "You've started a reply but haven't posted it";
+                            e.returnValue = txt;
+                            return txt;
+                        };
+                    } else if( !this.value && window.onbeforeunload ) {
+                        window.onbeforeunload = null;
+                    }
+                } ); // End event listener for the text area
+
+            // Event listener for the "Reply" button
             document.getElementById( "reply-dialog-button" )
                 .addEventListener( "click", function () {
 
@@ -751,9 +768,9 @@ function loadReplyLink( $, mw ) {
                     // [indentation, header, sigIdx, cmtAuthor]
                     doReply( ourMetadata[0], ourMetadata[1], ourMetadata[2],
                         cmtAuthor, rplyToXfdNom );
-                } );
+                } ); // End event listener for the "Reply" button
 
-            // Link cancel button event listener
+            // Event listener for the "Cancel" button
             document.getElementById( "reply-link-cancel-button" )
                 .addEventListener( "click", function () {
                     newLink.textContent = linkLabel;
@@ -763,7 +780,7 @@ function loadReplyLink( $, mw ) {
             // Cancel default event handler
             evt.preventDefault();
             return false;
-        } );
+        } ); // End event listener for the "(reply)" link
         newLinkWrapper.appendChild( document.createTextNode( " (" ) );
         newLinkWrapper.appendChild( newLink );
         newLinkWrapper.appendChild( document.createTextNode( ")" ) );
