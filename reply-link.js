@@ -280,7 +280,7 @@ function loadReplyLink( $, mw ) {
         console.log(spanStartIndices,spanLengths);
 
         /*
-         * I apologize for making you have to read this regex
+         * I apologize for making you have to read this regex.
          * I made a summary, though:
          *
          *  - a wikilink, without a ]] inside it
@@ -479,6 +479,9 @@ function loadReplyLink( $, mw ) {
                     reply += " " + ( window.replyLinkSigPrefix ? window.replyLinkSigPrefix : "" ) + SIGNATURE;
                 }
 
+                // Compose reply by adding indentation at the beginning of
+                // each line (if not replying to an XfD nom) or {{pb}}'s
+                // between lines (if replying to an XfD nom)
                 var replyLines = reply.split( "\n" );
                 var fullReply;
                 if( rplyToXfdNom ) {
@@ -489,7 +492,7 @@ function loadReplyLink( $, mw ) {
                     } ).join( "\n" );
                 }
 
-                // Extract wikitext of just the section
+                // Prepare section metadata for getSectionWikitext call
                 console.log( "in doReply, header =", header );
                 var sectionHeader, sectionIdx;
                 if( header === null ) {
@@ -498,14 +501,15 @@ function loadReplyLink( $, mw ) {
                     sectionHeader = header[1], sectionIdx = header[2];
                 }
 
+                // Compatibility with User:Bility/copySectionLink
                 if( copySectionLinkActive ) {
 
-                    // If User:Bility/copySectionLink is active, the paragraph
-                    // symbol at the end is a fake
+                    // If copySectionLink is active, the paragraph symbol at
+                    // the end is a fake
                     sectionHeader = sectionHeader.replace( /\s*¶$/, "" );
                 }
                 var sectionWikitext = getSectionWikitext( wikitext, sectionIdx, sectionHeader );
-                var oldSectionWikitext = sectionWikitext;
+                var oldSectionWikitext = sectionWikitext; // We'll String.replace old w/ new
 
                 // Now, obtain the index of the end of the comment
                 var strIdx = sigIdxToStrIdx( sectionWikitext, sigIdx );
@@ -524,7 +528,8 @@ function loadReplyLink( $, mw ) {
                     var commentingUser = userRgx.exec(
                             userMatches[userMatches.length - 1] )[1];
 
-                    // Normalize case
+                    // Normalize case, because that's what happens during
+                    // wikitext-to-HTML processing
                     commentingUser = commentingUser.charAt( 0 ).toUpperCase() +
                         commentingUser.substr( 1 );
                 } catch( e ) {
@@ -613,7 +618,6 @@ function loadReplyLink( $, mw ) {
                 if( e.message ) {
                     console.log( "Content request error: " + JSON.stringify( e.message ) );
                 }
-                //console.log( "Content request response: " + JSON.stringify( data ) );
                 throw e;
             }
         } ).fail( function () {
