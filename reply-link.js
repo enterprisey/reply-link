@@ -154,7 +154,9 @@ function loadReplyLink( $, mw ) {
     /**
      * Given some wikitext that's split into sections, return the full
      * wikitext (including header and newlines until the next header)
-     * of the section with the given (zero-based) index.
+     * of the section with the given (zero-based) index. To get the content
+     * before the first header, sectionIdx should be -1 and sectionName
+     * should be null.
      *
      * Performs a sanity check with the given section name.
      */
@@ -188,6 +190,11 @@ function loadReplyLink( $, mw ) {
 
         var headerCounter = 0;
         var headerMatch;
+
+        // The section before the first heading starts at idx 0
+        if( sectionIdx === -1 ) {
+            startIdx = 0;
+        }
 
         do {
             headerMatch = HEADER_RE.exec( wikitext );
@@ -484,14 +491,20 @@ function loadReplyLink( $, mw ) {
 
                 // Extract wikitext of just the section
                 console.log( "in doReply, header =", header );
-                var sectionHeader = header[1];
+                var sectionHeader, sectionIdx;
+                if( header === null ) {
+                    sectionHeader = null, sectionIdx = -1;
+                } else {
+                    sectionHeader = header[1], sectionIdx = header[2];
+                }
+
                 if( copySectionLinkActive ) {
 
                     // If User:Bility/copySectionLink is active, the paragraph
                     // symbol at the end is a fake
                     sectionHeader = sectionHeader.replace( /\s*¶$/, "" );
                 }
-                var sectionWikitext = getSectionWikitext( wikitext, header[2], sectionHeader );
+                var sectionWikitext = getSectionWikitext( wikitext, sectionIdx, sectionHeader );
                 var oldSectionWikitext = sectionWikitext;
 
                 // Now, obtain the index of the end of the comment
@@ -897,10 +910,10 @@ function loadReplyLink( $, mw ) {
             } else {
 
                 // Save all the metadata for this link
-                // currMetadata is [ currIndentation, username ]
                 currIndentation = metadata[ sigIdxEls[j].id ];
                 metadata[ sigIdxEls[j].id ] = [ currIndentation,
-                    currHeaderData.slice(0), currSigIdx ];
+                    currHeaderData ? currHeaderData.slice(0) : null,
+                    currSigIdx ];
                 currSigIdx++;
             }
         }
