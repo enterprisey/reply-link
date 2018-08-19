@@ -440,10 +440,11 @@ function loadReplyLink( $, mw ) {
     /**
      * Using the text in #reply-dialog-field, add a reply to the
      * current page. rplyToXfdNom is true if we're replying to an XfD nom,
-     * in which case we should use an asterisk instead of a colon. cmtAuthor
-     * is the username of the person who wrote the comment we're replying to.
+     * in which case we should use an asterisk instead of a colon.
+     * cmtAuthorDom is the username of the person who wrote the comment
+     * we're replying to, parsed from the DOM.
      */
-    function doReply( indentation, header, sigIdx, cmtAuthor, rplyToXfdNom ) {
+    function doReply( indentation, header, sigIdx, cmtAuthorDom, rplyToXfdNom ) {
         var wikitext;
 
         // Change UI to make it clear we're performing an operation
@@ -525,13 +526,13 @@ function loadReplyLink( $, mw ) {
                     var userRgx = /\[\[\s*[Uu]ser(?:(?:\s+|_)talk)?\s*:\s*(.+?)(?:\/.+?)?(?:#.+?)?(?:\|.+?)?\]\]/g;
                     var userMatches = sectionWikitext.slice( 0, strIdx )
                             .match( userRgx );
-                    var commentingUser = userRgx.exec(
+                    var cmtAuthorWktxt = userRgx.exec(
                             userMatches[userMatches.length - 1] )[1];
 
                     // Normalize case, because that's what happens during
                     // wikitext-to-HTML processing
-                    commentingUser = commentingUser.charAt( 0 ).toUpperCase() +
-                        commentingUser.substr( 1 );
+                    cmtAuthorWktxt = cmtAuthorWktxt.charAt( 0 ).toUpperCase() +
+                        cmtAuthorWktxt.substr( 1 );
                 } catch( e ) {
                     // No big deal, we'll just not have a user in the summary
                 }
@@ -539,10 +540,10 @@ function loadReplyLink( $, mw ) {
                 // Sanity check: is the sig username the same as the DOM one?
                 // We attempt to check sigRedirectMapping in case the naive
                 // check fails
-                if( commentingUser !== cmtAuthor &&
-                        sigRedirectMapping[ commentingUser ] !== cmtAuthor ) {
+                if( cmtAuthorWktxt !== cmtAuthorDom &&
+                        sigRedirectMapping[ cmtAuthorWktxt ] !== cmtAuthorDom ) {
                     throw( "Sanity check on sig username failed! Found " +
-                        commentingUser + " but expected " + cmtAuthor +
+                        cmtAuthorWktxt + " but expected " + cmtAuthorDom +
                         " (wikitext vs DOM)" );
                 }
 
@@ -565,8 +566,8 @@ function loadReplyLink( $, mw ) {
                 // Build summary
                 var postNoun = rplyToXfdNom ? xfdType + " nomination" : "comment";
                 var summary = "/* " + sectionHeader + " */ Replying " +
-                    ( commentingUser ? " to " + postNoun + " by " +
-                        commentingUser + " " : "" ) +
+                    ( cmtAuthorWktxt ? " to " + postNoun + " by " +
+                        cmtAuthorWktxt + " " : "" ) +
                     "([[User:Enterprisey/reply-link|reply-link]])";
 
                 // Send another request, this time to actually edit the
