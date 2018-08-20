@@ -975,6 +975,11 @@ function loadReplyLink( $, mw ) {
         copySectionLinkActive =
             !!document.querySelector( "span.mw-headline a#sectiontitlecopy0" );
 
+        // Default value (true) for the replyLinkAutoReload preference
+        if( !window.replyLinkAutoReload ) {
+            window.replyLinkAutoReload = true;
+        }
+
         // Insert "reply" links into DOM
         attachLinks();
 
