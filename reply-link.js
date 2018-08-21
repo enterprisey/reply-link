@@ -729,10 +729,13 @@ function loadReplyLink( $, mw ) {
                 " max-width: 1200px; width: 66%; margin-top: 0.5em;";
             panelEl.id = "reply-dialog-panel";
             panelEl.innerHTML = "<textarea id='reply-dialog-field' class='mw-ui-input' placeholder='Reply here!'></textarea>" +
-                "<table style='border-collapse:collapse'><tr><td style='width: 155px'>"+
-                "<button id='reply-dialog-button' class='mw-ui-button mw-ui-progressive'>Reply</button>" +
+                "<table style='border-collapse:collapse'><tr><td style='width: 255px'>"+
+                "<button id='reply-dialog-button' class='mw-ui-button mw-ui-progressive'>Reply</button> " +
+                "<button id='reply-link-preview-button' class='mw-ui-button'>Preview</button>" +
                 "<button id='reply-link-cancel-button' class='mw-ui-button mw-ui-quiet mw-ui-destructive'>Cancel</button></td>" +
-                "<td id='reply-dialog-status'></span><div style='clear:left'></td></tr></table>";
+                "<td id='reply-dialog-status'></span><div style='clear:left'></td></tr></table>" +
+                "<div id='reply-link-preview' colspan='2' style='border: thin dashed gray; padding: 0.5em; margin-top: 0.5em'></div>";
+            mw.util.addCSS( "#reply-link-preview:empty { display: none; }" );
             parent.insertBefore( panelEl, newLinkWrapper.nextSibling );
             var replyDialogField = document.getElementById( "reply-dialog-field" );
             replyDialogField.style = "padding: 0.625em; min-height: 10em; margin-bottom: 0.75em;";
@@ -787,6 +790,16 @@ function loadReplyLink( $, mw ) {
                     doReply( ourMetadata[0], ourMetadata[1], ourMetadata[2],
                         cmtAuthor, rplyToXfdNom );
                 } ); // End event listener for the "Reply" button
+
+            // Event listener for the "Preview" button
+            document.getElementById( "reply-link-preview-button" )
+                .addEventListener( "click", function () {
+                    $.post( "https://en.wikipedia.org/api/rest_v1/transform/wikitext/to/html",
+                        "wikitext=" + document.getElementById( "reply-dialog-field" ).value + "&body_only=true",
+                        function ( html ) {
+                            document.getElementById( "reply-link-preview" ).innerHTML = html;
+                        } );
+                } );
 
             // Event listener for the "Cancel" button
             document.getElementById( "reply-link-cancel-button" )
@@ -1029,6 +1042,8 @@ if( typeof module === typeof {} ) {
 // If we're in the right environment, load the script
 if( ( typeof jQuery !== "undefined" ) &&
         ( typeof mediaWiki !== "undefined" ) ) {
-    loadReplyLink( jQuery, mediaWiki );
+    mediaWiki.loader.using( "mediawiki.util", function () {
+        loadReplyLink( jQuery, mediaWiki );
+    } );
 }
 //</nowiki>
