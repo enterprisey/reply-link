@@ -734,6 +734,8 @@ function loadReplyLink( $, mw ) {
                 "<table style='border-collapse:collapse'><tr><td style='width: 255px'>"+
                 "<button id='reply-dialog-button' class='mw-ui-button mw-ui-progressive'>Reply</button> " +
                 "<button id='reply-link-preview-button' class='mw-ui-button'>Preview</button>" +
+                ( window.replyLinkPreloadPing === "button" ?
+                    " <button id='reply-link-ping-button' class='mw-ui-button'>Ping</button>" : "" ) +
                 "<button id='reply-link-cancel-button' class='mw-ui-button mw-ui-quiet mw-ui-destructive'>Cancel</button></td>" +
                 "<td id='reply-dialog-status'></span><div style='clear:left'></td></tr></table>" +
                 "<div id='reply-link-preview' colspan='2' style='border: thin dashed gray; padding: 0.5em; margin-top: 0.5em'></div>";
@@ -741,7 +743,7 @@ function loadReplyLink( $, mw ) {
             parent.insertBefore( panelEl, newLinkWrapper.nextSibling );
             var replyDialogField = document.getElementById( "reply-dialog-field" );
             replyDialogField.style = "padding: 0.625em; min-height: 10em; margin-bottom: 0.75em;";
-            if( window.replyLinkPreloadPing &&
+            if( window.replyLinkPreloadPing === "always" &&
                     cmtAuthor &&
                     cmtAuthor !== mw.config.get( "wgUserName" ) &&
                     !/(\d+.){3}\d+/.test( cmtAuthor ) ) {
@@ -805,6 +807,14 @@ function loadReplyLink( $, mw ) {
                             document.getElementById( "reply-link-preview" ).innerHTML = html;
                         } );
                 } );
+
+            if( window.replyLinkPreloadPing === "button" ) {
+                document.getElementById( "reply-link-ping-button" )
+                    .addEventListener( "click", function () {
+                        replyDialogField.value = "{{" + window.replyLinkPreloadPingTpl +
+                            "|" + cmtAuthor + "}}, ";
+                    } );
+            }
 
             // Event listener for the "Cancel" button
             document.getElementById( "reply-link-cancel-button" )
@@ -1013,7 +1023,7 @@ function loadReplyLink( $, mw ) {
         }
 
         if( window.replyLinkPreloadPing === undefined ) {
-            window.replyLinkPreloadPing = true;
+            window.replyLinkPreloadPing = "always";
         }
 
         if( window.replyLinkPreloadPingTpl === undefined ) {
