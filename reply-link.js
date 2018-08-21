@@ -202,6 +202,13 @@ function loadReplyLink( $, mw ) {
                 console.log("Header " + headerCounter + " (idx " + headerMatch.index + "): >" + headerMatch[0].trim() + "<");
                 if( headerCounter === sectionIdx ) {
                     var sanitizedWktxtSectionName = wikitextToTextContent( headerMatch[2] );
+
+                    // MediaWiki turns spaces before certain punctuation marks
+                    // into non-breaking spaces, so fix those. This is done by
+                    // the armorFrenchSpaces function in Mediawiki, in the file
+                    // /includes/parser/Sanitizer.php
+                    sectionName = sectionName.replace( /\xA0([?:;!%»›])/g, " $1" );
+
                     if( sanitizedWktxtSectionName !== sectionName ) {
                         throw( "Sanity check on header name failed! Found \"" +
                                 sanitizedWktxtSectionName + "\", expected \"" +
