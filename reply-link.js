@@ -866,6 +866,7 @@ function loadReplyLink( $, mw ) {
                 // that means someone put a timestamp in the middle of a
                 // paragraph)
                 if( TIMESTAMP_REGEX.test( node.textContent.trim() ) &&
+                        node.previousElementSibling &&
                         ( !node.nextElementSibling ||
                             node.nextElementSibling.tagName.toLowerCase() !== "a" ) ) {
                     linkId = "reply-link-" + idNum;
