@@ -745,7 +745,8 @@ function loadReplyLink( $, mw ) {
                     cmtAuthor &&
                     cmtAuthor !== mw.config.get( "wgUserName" ) &&
                     !/(\d+.){3}\d+/.test( cmtAuthor ) ) {
-                replyDialogField.value = "{{u|" + cmtAuthor + "}}, ";
+                replyDialogField.value = "{{" + window.replyLinkPreloadPingTpl +
+                    "|" + cmtAuthor + "}}, ";
             }
 
             /* Commented out because I could never get it to work
@@ -1014,6 +1015,11 @@ function loadReplyLink( $, mw ) {
         if( window.replyLinkPreloadPing === undefined ) {
             window.replyLinkPreloadPing = true;
         }
+
+        if( window.replyLinkPreloadPingTpl === undefined ) {
+            window.replyLinkPreloadPingTpl = "u";
+        }
+
         // Insert "reply" links into DOM
         attachLinks();
 
