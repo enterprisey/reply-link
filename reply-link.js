@@ -716,7 +716,7 @@ function loadReplyLink( $, mw ) {
 
             // Figure out the username of the author
             // of the comment we're replying to
-            var sigNode = newLinkWrapper.previousElementSibling;
+            var sigNode = newLinkWrapper.previousSibling;
             var possUserLinkElem = ( sigNode.nodeType === 1 &&
                 sigNode.tagName.toLowerCase() === "small" )
                 ? sigNode.children[sigNode.children.length-1]
