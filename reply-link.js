@@ -529,21 +529,19 @@ function loadReplyLink( $, mw ) {
                 }
 
                 // Determine the user who wrote the comment, for
-                // edit-summary purposes
-                try {
-                    var userRgx = /\[\[\s*[Uu]ser(?:(?:\s+|_)talk)?\s*:\s*(.+?)(?:\/.+?)?(?:#.+?)?(?:\|.+?)?\]\]/g;
-                    var userMatches = sectionWikitext.slice( 0, strIdx )
-                            .match( userRgx );
-                    var cmtAuthorWktxt = userRgx.exec(
-                            userMatches[userMatches.length - 1] )[1];
+                // edit-summary and sanity-check purposes
+                var userRgx = /\[\[\s*[Uu]ser(?:(?:\s+|_)talk)?\s*:\s*(.+?)(?:\/.+?)?(?:#.+?)?(?:\|.+?)?\]\]/g;
+                var userMatches = sectionWikitext.slice( 0, strIdx )
+                        .match( userRgx );
+                var cmtAuthorWktxt = userRgx.exec(
+                        userMatches[userMatches.length - 1] )[1];
 
-                    // Normalize case, because that's what happens during
-                    // wikitext-to-HTML processing
-                    cmtAuthorWktxt = cmtAuthorWktxt.charAt( 0 ).toUpperCase() +
-                        cmtAuthorWktxt.substr( 1 );
-                } catch( e ) {
-                    // No big deal, we'll just not have a user in the summary
-                }
+                // Normalize case, because that's what happens during
+                // wikitext-to-HTML processing
+                cmtAuthorWktxt = cmtAuthorWktxt.charAt( 0 ).toUpperCase() +
+                    cmtAuthorWktxt.substr( 1 );
+                cmtAuthorDom = cmtAuthorDom.charAt( 0 ).toUpperCase() +
+                    cmtAuthorDom.substr( 1 );
 
                 // Sanity check: is the sig username the same as the DOM one?
                 // We attempt to check sigRedirectMapping in case the naive
