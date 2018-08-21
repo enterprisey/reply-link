@@ -459,6 +459,7 @@ function loadReplyLink( $, mw ) {
         document.getElementById( "reply-dialog-field" ).style["background-image"] =
             "url(" + window.replyLinkPendingImageUrl + ")";
         document.querySelector( "#reply-dialog-button" ).disabled = true;
+        document.querySelector( "#reply-link-preview-button" ).disabled = true;
         document.querySelector( "#reply-link-cancel-button" ).disabled = true;
         setStatus( "Loading..." );
 
@@ -609,6 +610,7 @@ function loadReplyLink( $, mw ) {
                                 ">spam blacklist</a>. Remove the link(s) to: " +
                                 data.edit.spamblacklist.split( "|" ).join( ", " ) + " to allow saving." );
                             document.querySelector( "#reply-dialog-button" ).disabled = false;
+                            document.querySelector( "#reply-link-preview-button" ).disabled = false;
                             document.querySelector( "#reply-link-cancel-button" ).disabled = false;
                         } else {
                             setStatus( "While saving, the edit query returned an error." +
