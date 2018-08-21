@@ -714,6 +714,15 @@ function loadReplyLink( $, mw ) {
                 return false;
             }
 
+            // Figure out the username of the author
+            // of the comment we're replying to
+            var sigNode = newLinkWrapper.previousElementSibling;
+            var possUserLinkElem = ( sigNode.nodeType === 1 &&
+                sigNode.tagName.toLowerCase() === "small" )
+                ? sigNode.children[sigNode.children.length-1]
+                : sigNode.previousElementSibling;
+            var cmtAuthor = findUsernameInElem( possUserLinkElem );
+
             // Create panel
             var panelEl = document.createElement( "div" );
             panelEl.style = "padding: 1em; margin-left: 1.6em;" +
@@ -727,6 +736,12 @@ function loadReplyLink( $, mw ) {
             parent.insertBefore( panelEl, newLinkWrapper.nextSibling );
             var replyDialogField = document.getElementById( "reply-dialog-field" );
             replyDialogField.style = "padding: 0.625em; min-height: 10em; margin-bottom: 0.75em;";
+            if( window.replyLinkPreloadPing &&
+                    cmtAuthor &&
+                    cmtAuthor !== mw.config.get( "wgUserName" ) &&
+                    !/(\d+.){3}\d+/.test( cmtAuthor ) ) {
+                replyDialogField.value = "{{u|" + cmtAuthor + "}}, ";
+            }
 
             /* Commented out because I could never get it to work
             // Autofill with a recommendation if we're replying to a nom
@@ -766,15 +781,6 @@ function loadReplyLink( $, mw ) {
             // Event listener for the "Reply" button
             document.getElementById( "reply-dialog-button" )
                 .addEventListener( "click", function () {
-
-                    // Figure out the username of the author
-                    // of the comment we're replying to
-                    var sigNode = this.parentNode.parentNode.parentNode.parentNode.parentNode.previousElementSibling;
-                    var possUserLinkElem = ( sigNode.nodeType === 1 && 
-                        sigNode.tagName.toLowerCase() === "small" )
-                        ? sigNode.children[sigNode.children.length-1]
-                        : sigNode.previousElementSibling;
-                    var cmtAuthor = findUsernameInElem( possUserLinkElem );
 
                     // ourMetadata contains data in the format:
                     // [indentation, header, sigIdx, cmtAuthor]
@@ -865,7 +871,7 @@ function loadReplyLink( $, mw ) {
                 // that means someone put a timestamp in the middle of a
                 // paragraph)
                 if( TIMESTAMP_REGEX.test( node.textContent.trim() ) &&
-                        node.previousElementSibling &&
+                        node.previousSibling &&
                         ( !node.nextElementSibling ||
                             node.nextElementSibling.tagName.toLowerCase() !== "a" ) ) {
                     linkId = "reply-link-" + idNum;
@@ -983,11 +989,14 @@ function loadReplyLink( $, mw ) {
         copySectionLinkActive =
             !!document.querySelector( "span.mw-headline a#sectiontitlecopy0" );
 
-        // Default value (true) for the replyLinkAutoReload preference
+        // Default value for some preferences
         if( !window.replyLinkAutoReload ) {
             window.replyLinkAutoReload = true;
         }
 
+        if( !window.replyLinkPreloadPing ) {
+            window.replyLinkPreloadPing = true;
+        }
         // Insert "reply" links into DOM
         attachLinks();
 
