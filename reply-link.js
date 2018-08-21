@@ -748,9 +748,7 @@ function loadReplyLink( $, mw ) {
                     cmtAuthor &&
                     cmtAuthor !== mw.config.get( "wgUserName" ) &&
                     !/(\d+.){3}\d+/.test( cmtAuthor ) ) {
-                replyDialogField.value = "{{" + window.replyLinkPreloadPingTpl +
-                    "|" + cmtAuthor + "}}, ";
-            }
+                replyDialogField.value = window.replyLinkPreloadPingTpl.replace( "##", cmtAuthor );            }
 
             /* Commented out because I could never get it to work
             // Autofill with a recommendation if we're replying to a nom
@@ -1028,7 +1026,7 @@ function loadReplyLink( $, mw ) {
         }
 
         if( window.replyLinkPreloadPingTpl === undefined ) {
-            window.replyLinkPreloadPingTpl = "u";
+            window.replyLinkPreloadPingTpl = "{{u|##}}, ";
         }
 
         // Insert "reply" links into DOM
