@@ -1005,11 +1005,11 @@ function loadReplyLink( $, mw ) {
             !!document.querySelector( "span.mw-headline a#sectiontitlecopy0" );
 
         // Default value for some preferences
-        if( !window.replyLinkAutoReload ) {
+        if( window.replyLinkAutoReload === undefined ) {
             window.replyLinkAutoReload = true;
         }
 
-        if( !window.replyLinkPreloadPing ) {
+        if( window.replyLinkPreloadPing === undefined ) {
             window.replyLinkPreloadPing = true;
         }
         // Insert "reply" links into DOM
