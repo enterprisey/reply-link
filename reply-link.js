@@ -124,6 +124,11 @@ function loadReplyLink( $, mw ) {
         for( let i = 0; i < 3; i++ ) {
             links = el.tagName.toLowerCase() === "a" ? [ el ]
                 : el.querySelectorAll( "a" );
+
+            // Compatibility with "Comments in Local Time"
+            if( el.className.indexOf( "localcomments" ) >= 0 ) i--;
+
+            // If we couldn't get any links, try again with prev elem
             if( !links ) continue;
 
             var link; // his name isn't zelda
@@ -811,8 +816,8 @@ function loadReplyLink( $, mw ) {
             if( window.replyLinkPreloadPing === "button" ) {
                 document.getElementById( "reply-link-ping-button" )
                     .addEventListener( "click", function () {
-                        replyDialogField.value = window.replyLinkPreloadPingTpl.
-                            replace( "##", cmtAuthor ) + replyDialogField.value;
+                        replyDialogField.value = window.replyLinkPreloadPingTpl
+                            .replace( "##", cmtAuthor ) + replyDialogField.value;
                     } );
             }
 
