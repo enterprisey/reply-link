@@ -796,8 +796,10 @@ function loadReplyLink( $, mw ) {
             // Event listener for the "Preview" button
             document.getElementById( "reply-link-preview-button" )
                 .addEventListener( "click", function () {
+                    var sanitizedCode = document.getElementById( "reply-dialog-field" ).value
+                            .replace( /&/g, "%26" );
                     $.post( "https://en.wikipedia.org/api/rest_v1/transform/wikitext/to/html",
-                        "wikitext=" + document.getElementById( "reply-dialog-field" ).value + "&body_only=true",
+                        "wikitext=" + sanitizedCode + "&body_only=true",
                         function ( html ) {
                             document.getElementById( "reply-link-preview" ).innerHTML = html;
                         } );
