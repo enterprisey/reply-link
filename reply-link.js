@@ -692,6 +692,7 @@ function loadReplyLink( $, mw ) {
             // Remove previous panel
             var prevPanel = document.getElementById( "reply-dialog-panel" );
             if( prevPanel ) {
+                window.onbeforeunload = null;
                 prevPanel.remove();
             }
 
