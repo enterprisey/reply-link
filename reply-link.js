@@ -463,9 +463,7 @@ function loadReplyLink( $, mw ) {
         // Change UI to make it clear we're performing an operation
         document.getElementById( "reply-dialog-field" ).style["background-image"] =
             "url(" + window.replyLinkPendingImageUrl + ")";
-        document.querySelector( "#reply-dialog-button" ).disabled = true;
-        document.querySelector( "#reply-link-preview-button" ).disabled = true;
-        document.querySelector( "#reply-link-cancel-button" ).disabled = true;
+        document.querySelector( "#reply-link-buttons button" ).disabled = true;
         setStatus( "Loading..." );
 
         // Send request to fetch current page wikitext
@@ -614,9 +612,7 @@ function loadReplyLink( $, mw ) {
                                 "\"https://en.wikipedia.org/wiki/Wikipedia:Spam_blacklist\"" +
                                 ">spam blacklist</a>. Remove the link(s) to: " +
                                 data.edit.spamblacklist.split( "|" ).join( ", " ) + " to allow saving." );
-                            document.querySelector( "#reply-dialog-button" ).disabled = false;
-                            document.querySelector( "#reply-link-preview-button" ).disabled = false;
-                            document.querySelector( "#reply-link-cancel-button" ).disabled = false;
+                            document.querySelector( "#reply-link-buttons button" ).disabled = false;
                         } else {
                             setStatus( "While saving, the edit query returned an error." +
                                 " Check the browser console for more information." );
@@ -736,7 +732,7 @@ function loadReplyLink( $, mw ) {
                 " max-width: 1200px; width: 66%; margin-top: 0.5em;";
             panelEl.id = "reply-dialog-panel";
             panelEl.innerHTML = "<textarea id='reply-dialog-field' class='mw-ui-input' placeholder='Reply here!'></textarea>" +
-                "<table style='border-collapse:collapse'><tr><td style='width: " +
+                "<table style='border-collapse:collapse'><tr><td id='reply-link-buttons' style='width: " +
                 ( window.replyLinkPreloadPing === "button" ? "325" : "255" ) + "px'>" +
                 "<button id='reply-dialog-button' class='mw-ui-button mw-ui-progressive'>Reply</button> " +
                 "<button id='reply-link-preview-button' class='mw-ui-button'>Preview</button>" +
