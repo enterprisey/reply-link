@@ -576,7 +576,7 @@ function loadReplyLink( $, mw ) {
                 // Build summary
                 var summary = "/* " + sectionHeader + " */ Replying to " +
                     ( rplyToXfdNom ? xfdType + " nomination by " : "" ) +
-                    cmtAuthorWktxt + "([[User:Enterprisey/reply-link|reply-link]])";
+                    cmtAuthorWktxt + " ([[User:Enterprisey/reply-link|reply-link]])";
 
                 // Send another request, this time to actually edit the
                 // page
