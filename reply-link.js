@@ -1067,8 +1067,6 @@ if( typeof module === typeof {} ) {
 // If we're in the right environment, load the script
 if( ( typeof jQuery !== "undefined" ) &&
         ( typeof mediaWiki !== "undefined" ) ) {
-    mediaWiki.loader.using( "mediawiki.util", function () {
-        loadReplyLink( jQuery, mediaWiki );
-    } );
+    loadReplyLink( jQuery, mediaWiki );
 }
 //</nowiki>
