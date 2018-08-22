@@ -574,11 +574,9 @@ function loadReplyLink( $, mw ) {
                         sectionWikitext );
 
                 // Build summary
-                var postNoun = rplyToXfdNom ? xfdType + " nomination" : "comment";
-                var summary = "/* " + sectionHeader + " */ Replying " +
-                    ( cmtAuthorWktxt ? " to " + postNoun + " by " +
-                        cmtAuthorWktxt + " " : "" ) +
-                    "([[User:Enterprisey/reply-link|reply-link]])";
+                var summary = "/* " + sectionHeader + " */ Replying to " +
+                    ( rplyToXfdNom ? xfdType + " nomination by " : "" ) +
+                    cmtAuthorWktxt + "([[User:Enterprisey/reply-link|reply-link]])";
 
                 // Send another request, this time to actually edit the
                 // page
