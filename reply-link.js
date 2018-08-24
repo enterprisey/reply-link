@@ -44,15 +44,6 @@ function loadReplyLink( $, mw ) {
     var currentPageName;
 
     /**
-     * A boolean flag, true if the script User:Bility/copySectionLink has
-     * run on this page. It's initialized in onReady. It' true iff there's
-     * a link with an ID that's "sectiontitlecopy0" inside a
-     * span.mw-headline. It's used in the section header sanity check in
-     * getSectionWikitext to remove the trailing paragraph symbol.
-     */
-    var copySectionLinkActive = false;
-
-    /**
      * A map for signatures that contain redirects, so that they can still
      * pass the sanity check. This will be updated manually, because I
      * don't want the overhead of a whole 'nother API call in the middle
@@ -515,12 +506,18 @@ function loadReplyLink( $, mw ) {
                 }
 
                 // Compatibility with User:Bility/copySectionLink
-                if( copySectionLinkActive ) {
+                if( document.querySelector( "span.mw-headline a#sectiontitlecopy0" ) ) {
 
                     // If copySectionLink is active, the paragraph symbol at
                     // the end is a fake
                     sectionHeader = sectionHeader.replace( /\s*¶$/, "" );
                 }
+
+                // Compatibility with the "auto-number headings" preference
+                if( document.querySelector( "span.mw-headline-number" ) ) {
+                    sectionHeader = sectionHeader.replace( /^\d+ /, "" );
+                }
+
                 var sectionWikitext = getSectionWikitext( wikitext, sectionIdx, sectionHeader );
                 var oldSectionWikitext = sectionWikitext; // We'll String.replace old w/ new
 
@@ -1011,10 +1008,6 @@ function loadReplyLink( $, mw ) {
                 xfdType = "FfD";
             }
         }
-
-        // Initialize the copySectionLinkActive global variable
-        copySectionLinkActive =
-            !!document.querySelector( "span.mw-headline a#sectiontitlecopy0" );
 
         // Default value for some preferences
         if( window.replyLinkAutoReload === undefined ) {
