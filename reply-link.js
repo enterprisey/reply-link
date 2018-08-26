@@ -1,6 +1,8 @@
 //<nowiki>
 function loadReplyLink( $, mw ) {
     var TIMESTAMP_REGEX = /\(UTC(?:(?:−|\+)\d+?(?:\.\d+)?)?\)\S*?$/m;
+    var EDIT_REQ_REGEX = /^((Semi|Template|Extended-confirmed)-p|P)rotected edit request on \d{2} \w+ \d{4}/;
+    var EDIT_REQ_TPL_REGEX = /\{\{edit (template|fully|extended|semi)-protected\s*(\|.+?)*\}\}/;
     var SIGNATURE = "~~" + "~~"; // split up because it might get processed
 
     /**
@@ -146,6 +148,35 @@ function loadReplyLink( $, mw ) {
             el = el.previousElementSibling;
         }
         return null;
+    }
+
+    /**
+     * Given the wikitext of a section, attempt to find the first edit
+     * request template in it, and then mark that template as answered.
+     * Returns the modified section wikitext.
+     */
+    function markEditReqAnswered( sectionWikitext ) {
+        var editReqMatch = EDIT_REQ_TPL_REGEX.exec( sectionWikitext );
+        if( !editReqMatch ) {
+            console.log( "Couldn't find an edit request!" );
+            return sectionWikitext;
+        }
+
+        var ansParamMatch = /ans(wered)?=.*?(\||\}\})/.exec( editReqMatch[0] );
+        if( !ansParamMatch ) {
+            sectionWikitext = sectionWikitext.replace(
+                editReqMatch[0],
+                editReqMatch[0].replace( "}}", "answered=yes}}" )
+            );
+        } else {
+            var newEditReqTpl = editReqMatch[0].replace( ansParamMatch[0],
+                "answered=yes" + ansParamMatch[2] );
+            sectionWikitext = sectionWikitext.replace(
+                editReqMatch[0],
+                newEditReqTpl
+            );
+        }
+        return sectionWikitext;
     }
 
     /**
@@ -558,6 +589,15 @@ function loadReplyLink( $, mw ) {
                 sectionWikitext = insertTextAfterIdx( sectionWikitext, strIdx,
                         indentation.length, fullReply );
 
+                // Also, if the user wanted the edit request to be answered,
+                // do that
+                var editReqCheckbox = document.getElementById(  "reply-link-option-edit-req" );
+                var markedEditReq = false;
+                if( editReqCheckbox && editReqCheckbox.checked ) {
+                    sectionWikitext = markEditReqAnswered( sectionWikitext );
+                    markedEditReq = true;
+                }
+
                 // If the user preferences indicate a dry run, print what the
                 // wikitext would have been post-edit and bail out
                 if( window.replyLinkDryRun ) {
@@ -573,7 +613,9 @@ function loadReplyLink( $, mw ) {
                 // Build summary
                 var summary = "/* " + sectionHeader + " */ Replying to " +
                     ( rplyToXfdNom ? xfdType + " nomination by " : "" ) +
-                    cmtAuthorWktxt + " ([[User:Enterprisey/reply-link|reply-link]])";
+                    cmtAuthorWktxt +
+                    ( markedEditReq ? " and marking edit request as answered" : "" ) +
+                    " ([[User:Enterprisey/reply-link|reply-link]])";
 
                 // Send another request, this time to actually edit the
                 // page
@@ -712,6 +754,9 @@ function loadReplyLink( $, mw ) {
                 return false;
             }
 
+            // Fetch metadata about this specific comment
+            var ourMetadata = metadata[this.id];
+
             // Figure out the username of the author
             // of the comment we're replying to
             var sigNode = newLinkWrapper.previousSibling;
@@ -735,8 +780,9 @@ function loadReplyLink( $, mw ) {
                     " <button id='reply-link-ping-button' class='mw-ui-button'>Ping</button>" : "" ) +
                 "<button id='reply-link-cancel-button' class='mw-ui-button mw-ui-quiet mw-ui-destructive'>Cancel</button></td>" +
                 "<td id='reply-dialog-status'></span><div style='clear:left'></td></tr></table>" +
-                "<div id='reply-link-preview' colspan='2' style='border: thin dashed gray; padding: 0.5em; margin-top: 0.5em'></div>";
-            mw.util.addCSS( "#reply-link-preview:empty { display: none; }" );
+                "<div id='reply-link-options' class='gone-on-empty' style='margin-top: 0.5em'></div>" +
+                "<div id='reply-link-preview' class='gone-on-empty' style='border: thin dashed gray; padding: 0.5em; margin-top: 0.5em'></div>";
+            mw.util.addCSS( ".gone-on-empty:empty { display: none; }" );
             parent.insertBefore( panelEl, newLinkWrapper.nextSibling );
             var replyDialogField = document.getElementById( "reply-dialog-field" );
             replyDialogField.style = "padding: 0.625em; min-height: 10em; margin-bottom: 0.75em;";
@@ -745,6 +791,24 @@ function loadReplyLink( $, mw ) {
                     cmtAuthor !== mw.config.get( "wgUserName" ) &&
                     !/(\d+.){3}\d+/.test( cmtAuthor ) ) {
                 replyDialogField.value = window.replyLinkPreloadPingTpl.replace( "##", cmtAuthor );
+            }
+
+            // Fill up #reply-link-options
+            function newOption( id, text ) {
+                var newCheckbox = document.createElement( "input" );
+                newCheckbox.type = "checkbox";
+                newCheckbox.id = id;
+                var newLabel = document.createElement( "label" );
+                newLabel.htmlFor = id;
+                newLabel.appendChild( document.createTextNode( text ) );
+                document.getElementById( "reply-link-options" ).appendChild( newCheckbox );
+                document.getElementById( "reply-link-options" ).appendChild( newLabel );
+            }
+
+            // If the current section header text indicates an edit request,
+            // add the relevant option
+            if( EDIT_REQ_REGEX.test( ourMetadata[1][1] ) ) {
+                newOption( "reply-link-option-edit-req", "Mark edit request as answered?" );
             }
 
             /* Commented out because I could never get it to work
@@ -761,9 +825,6 @@ function loadReplyLink( $, mw ) {
                 sel.removeAllRanges();
                 sel.addRange( range );
             }*/
-
-            // Fetch metadata about this specific comment
-            var ourMetadata = metadata[this.id];
 
             // Event listener for the text area
             document.getElementById( "reply-dialog-field" )
@@ -787,7 +848,7 @@ function loadReplyLink( $, mw ) {
                 .addEventListener( "click", function () {
 
                     // ourMetadata contains data in the format:
-                    // [indentation, header, sigIdx, cmtAuthor]
+                    // [indentation, header, sigIdx]
                     doReply( ourMetadata[0], ourMetadata[1], ourMetadata[2],
                         cmtAuthor, rplyToXfdNom );
                 } ); // End event listener for the "Reply" button
