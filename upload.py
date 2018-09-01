@@ -15,7 +15,6 @@ import pywikibot
 SUMMARY = "Updating {} ({} @ {})"
 SCRIPT_NAME = "reply-link"
 
-
 def get_branch_and_hash():
     """Gets the branch that the repo is currently on, as well as the hash
     of the most recent commit to it"""
