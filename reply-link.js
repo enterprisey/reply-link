@@ -600,7 +600,8 @@ function loadReplyLink( $, mw ) {
 
                 // If the user preferences indicate a dry run, print what the
                 // wikitext would have been post-edit and bail out
-                if( window.replyLinkDryRun ) {
+                var dryRunCheckbox = document.getElementById( "reply-link-option-dry-run" );
+                if( window.replyLinkDryRun === "always" || dryRunCheckbox.checked ) {
                     console.log( "~~~~~~ DRY RUN CONCLUDED ~~~~~~" );
                     console.log( sectionWikitext );
                     setStatus( "Check the console for the dry-run results." );
@@ -794,10 +795,13 @@ function loadReplyLink( $, mw ) {
             }
 
             // Fill up #reply-link-options
-            function newOption( id, text ) {
+            function newOption( id, text, defaultOn ) {
                 var newCheckbox = document.createElement( "input" );
                 newCheckbox.type = "checkbox";
                 newCheckbox.id = id;
+                if( defaultOn ) {
+                    newCheckbox.checked = true;
+                }
                 var newLabel = document.createElement( "label" );
                 newLabel.htmlFor = id;
                 newLabel.appendChild( document.createTextNode( text ) );
@@ -805,10 +809,16 @@ function loadReplyLink( $, mw ) {
                 document.getElementById( "reply-link-options" ).appendChild( newLabel );
             }
 
+            // If the dry-run option is "checkbox", add an option to make it
+            // a dry run
+            if( window.replyLinkDryRun === "checkbox" ) {
+                newOption( "reply-link-option-dry-run", "Don't actually edit?", true );
+            }
+
             // If the current section header text indicates an edit request,
             // add the relevant option
             if( EDIT_REQ_REGEX.test( ourMetadata[1][1] ) ) {
-                newOption( "reply-link-option-edit-req", "Mark edit request as answered?" );
+                newOption( "reply-link-option-edit-req", "Mark edit request as answered?", false );
             }
 
             /* Commented out because I could never get it to work
@@ -1073,6 +1083,10 @@ function loadReplyLink( $, mw ) {
         // Default value for some preferences
         if( window.replyLinkAutoReload === undefined ) {
             window.replyLinkAutoReload = true;
+        }
+
+        if( window.replyLinkDryRun === undefined ) {
+            window.replyLinkDryRun = "always";
         }
 
         if( window.replyLinkPreloadPing === undefined ) {
