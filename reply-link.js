@@ -188,30 +188,27 @@ function loadReplyLink( $, mw ) {
      *
      * Performs a sanity check with the given section name.
      */
-    function getSectionWikitext( dirtyWikitext, sectionIdx, sectionName ) {
+    function getSectionWikitext( wikitext, sectionIdx, sectionName ) {
         var HEADER_RE = /^\s*==(=*)\s*(.+?)\s*\1==\s*$/gm;
 
         //console.log("In getSectionWikitext, sectionIdx = " + sectionIdx + ", sectionName = >" + sectionName + "<");
         //console.log("wikitext (first 1000 chars) is " + dirtyWikitext.substring(0, 1000));
 
-        // Parsing pitfall: we shouldn't recognize headers inside code
-        // blocks, or collapse blocks, because MW doesn't either
-        // So, replace both sorts of blocks with special keys
-        var DELIMS_RE = /<pre>[\s\S]+?<\/pre>/g;
-        var replacements = {}; // maps keys to blocks
-        var delimsMatch;
-        var wikitext = dirtyWikitext;
-        var key;
+        // There are certain locations where a header may appear in the
+        // wikitext, but will not be present in the HTML; such as code
+        // blocks or comments. So we keep track of those ranges
+        // and ignore headings inside those.
+        var ignoreSpanStarts = []; // list of ignored span beginnings
+        var ignoreSpanLengths = []; // list of ignored span lengths
+        var IGNORE_RE = /(<pre>[\s\S]+?<\/pre>)|(<!--[\s\S]+?-->)/g;
+        var ignoreSpanMatch;
         do {
-            delimsMatch = DELIMS_RE.exec( dirtyWikitext );
-            if( delimsMatch ) {
-                if( HEADER_RE.test( delimsMatch[0] ) ) {
-                    key = "%!%!%!" + ( Object.keys( replacements ).length ) + "!%!%!%";
-                    wikitext = wikitext.replace( delimsMatch[0], key );
-                    replacements[key] = delimsMatch[0];
-                }
+            ignoreSpanMatch = IGNORE_RE.exec( wikitext );
+            if( ignoreSpanMatch ) {
+                ignoreSpanStarts.push( ignoreSpanMatch.index );
+                ignoreSpanLengths.push( ignoreSpanMatch[0].length );
             }
-        } while( delimsMatch );
+        } while( ignoreSpanMatch );
 
         var startIdx = -1; // wikitext index of section start
         var endIdx = -1; // wikitext index of section end
@@ -224,9 +221,32 @@ function loadReplyLink( $, mw ) {
             startIdx = 0;
         }
 
+        // So that we don't check every ignore span every time
+        var ignoreSpanStartIdx = 0;
+
+        headerMatchLoop:
         do {
             headerMatch = HEADER_RE.exec( wikitext );
             if( headerMatch ) {
+
+                // Check that we're not inside one of the "ignore" spans
+                for( var igIdx = ignoreSpanStartIdx; igIdx <
+                    ignoreSpanStarts.length; igIdx++ ) {
+                    if( headerMatch.index > ignoreSpanStarts[igIdx] ) {
+                        if ( headerMatch.index + headerMatch[0].length <=
+                            ignoreSpanStarts[igIdx] + ignoreSpanLengths[igIdx] ) {
+
+                            // Invalid header
+                            continue headerMatchLoop;
+                        }
+                    } else {
+
+                        // We'll never encounter this span again, since
+                        // headers only get later and later in the wikitext
+                        ignoreSpanStartIdx = igIdx;
+                    }
+                }
+
                 console.log("Header " + headerCounter + " (idx " + headerMatch.index + "): >" + headerMatch[0].trim() + "<");
                 if( headerCounter === sectionIdx ) {
                     var sanitizedWktxtSectionName = wikitextToTextContent( headerMatch[2] );
@@ -260,19 +280,7 @@ function loadReplyLink( $, mw ) {
         }
 
         //console.log("[getSectionWikitext] Slicing from " + startIdx + " to " + endIdx);
-        var cleanSlice = wikitext.slice( startIdx, endIdx );
-
-        // Now, inflate the blocks (if any) that we removed earlier
-        var slice = cleanSlice;
-        var KEY_RE = /%\!%\!%\!(\d+)\!%\!%\!%/g;
-        var keyMatch;
-        do {
-            keyMatch = KEY_RE.exec( cleanSlice );
-            if( keyMatch ) {
-                slice = slice.replace( keyMatch[0], replacements[ keyMatch[0] ] );
-            }
-        } while( keyMatch );
-        return slice;
+        return wikitext.slice( startIdx, endIdx );
     }
 
     /**
@@ -312,7 +320,7 @@ function loadReplyLink( $, mw ) {
                 spanLengths.push( skipRegionMatch[0].length );
             }
         } while( skipRegionMatch );
-        console.log(spanStartIndices,spanLengths);
+        //console.log(spanStartIndices,spanLengths);
 
         /*
          * I apologize for making you have to read this regex.
@@ -334,6 +342,7 @@ function loadReplyLink( $, mw ) {
 
         // `this_is_true` is to avoid triggering a JS linter rule
         var this_is_true = true;
+
         sigMatchLoop:
         for( ; this_is_true ; matchIdx++ ) {
             match = SIG_REGEX.exec( sectionWikitext );
@@ -350,9 +359,9 @@ function loadReplyLink( $, mw ) {
                 //console.log(spanStartIndices[dstSpnIdx],match.index,
                 //    matchIdxEnd, spanStartIndices[dstSpnIdx] +
                 //        spanLengths[dstSpnIdx] );
-                if( ( match.index > spanStartIndices[dstSpnIdx] &&
+                if( match.index > spanStartIndices[dstSpnIdx] &&
                     ( matchIdxEnd <= spanStartIndices[dstSpnIdx] +
-                        spanLengths[dstSpnIdx] ) ) ) {
+                        spanLengths[dstSpnIdx] ) ) {
 
                     // That wasn't really a match (as in, this match does not
                     // correspond to any sig idx in the DOM), so we can't
