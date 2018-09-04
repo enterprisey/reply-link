@@ -300,6 +300,8 @@ function loadReplyLink( $, mw ) {
         //
         //  - Spans with the class delsort-notice
         //  - Divs with the class xfd-relist
+        //  - Templates that bury signatures in divs
+        //    (e.g. resolution templates)
         //  - Some others
         //
         // So, we grab the corresponding wikitext regions with regexes,
@@ -311,7 +313,10 @@ function loadReplyLink( $, mw ) {
         var spanLengths = [];
         var DELSORT_SPAN_RE_TXT = /<small class="delsort-notice">(?:<small>.+?<\/small>|.)+?<\/small>/.source;
         var XFD_RELIST_RE_TXT = /<div class="xfd_relist"[\s\S]+?<\/div>(\s*|<!--.+?-->)*/.source;
-        var SKIP_REGION_RE = new RegExp("(" + DELSORT_SPAN_RE_TXT + ")|(" + XFD_RELIST_RE_TXT + ")", "g");
+        var TEMPLATES_RE_TXT = /\{\{moved discussion (to|from)\|.+?\}\}/.source;
+        var SKIP_REGION_RE = new RegExp("(" + DELSORT_SPAN_RE_TXT + ")|(" +
+            XFD_RELIST_RE_TXT + ")|(" +
+            TEMPLATES_RE_TXT + ")", "ig");
         var skipRegionMatch;
         do {
             skipRegionMatch = SKIP_REGION_RE.exec( sectionWikitext );
