@@ -615,7 +615,7 @@ function loadReplyLink( $, mw ) {
                 // If the user preferences indicate a dry run, print what the
                 // wikitext would have been post-edit and bail out
                 var dryRunCheckbox = document.getElementById( "reply-link-option-dry-run" );
-                if( window.replyLinkDryRun === "always" || dryRunCheckbox.checked ) {
+                if( window.replyLinkDryRun === "always" || ( dryRunCheckbox && dryRunCheckbox.checked ) ) {
                     console.log( "~~~~~~ DRY RUN CONCLUDED ~~~~~~" );
                     console.log( sectionWikitext );
                     setStatus( "Check the console for the dry-run results." );
@@ -1100,7 +1100,7 @@ function loadReplyLink( $, mw ) {
         }
 
         if( window.replyLinkDryRun === undefined ) {
-            window.replyLinkDryRun = "always";
+            window.replyLinkDryRun = "never";
         }
 
         if( window.replyLinkPreloadPing === undefined ) {
