@@ -67,6 +67,16 @@ function loadReplyLink( $, mw ) {
     }
 
     /**
+     * Decode HTML entities. Used in the signature sanity check.
+     * Source: https://stackoverflow.com/a/1912522/1757964
+     */
+    function htmlDecode( html ) {
+        var el = document.createElement( "span" );
+        el.innerHTML = html;
+        return el.childNodes[0].nodeValue;
+    }
+
+    /**
      * When there's a panel being shown, this function sets the status
      * in the panel to the first argument. The callback function is
      * optional.
@@ -593,6 +603,7 @@ function loadReplyLink( $, mw ) {
                 // We attempt to check sigRedirectMapping in case the naive
                 // check fails
                 if( cmtAuthorWktxt !== cmtAuthorDom &&
+                        htmlDecode( cmtAuthorWktxt ) !== cmtAuthorDom &&
                         sigRedirectMapping[ cmtAuthorWktxt ] !== cmtAuthorDom ) {
                     throw( "Sanity check on sig username failed! Found " +
                         cmtAuthorWktxt + " but expected " + cmtAuthorDom +
