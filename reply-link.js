@@ -248,12 +248,12 @@ function loadReplyLink( $, mw ) {
 
                             // Invalid header
                             continue headerMatchLoop;
-                        }
-                    } else {
+                        } else {
 
-                        // We'll never encounter this span again, since
-                        // headers only get later and later in the wikitext
-                        ignoreSpanStartIdx = igIdx;
+                            // We'll never encounter this span again, since
+                            // headers only get later and later in the wikitext
+                            ignoreSpanStartIdx = igIdx;
+                        }
                     }
                 }
 
