@@ -630,6 +630,7 @@ function loadReplyLink( $, mw ) {
                     console.log( "~~~~~~ DRY RUN CONCLUDED ~~~~~~" );
                     console.log( sectionWikitext );
                     setStatus( "Check the console for the dry-run results." );
+                    document.querySelector( "#reply-link-buttons button" ).disabled = false;
                     return;
                 }
 
