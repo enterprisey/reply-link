@@ -349,7 +349,7 @@ function loadReplyLink( $, mw ) {
          *  - some comments/whitespace or some non-whitespace
          *  - finally, the end of the line
          */
-        var SIG_REGEX = /(?:\[\[\s*(([Uu]ser(\s+talk)?|Special:Contributions\/)([^\]]||\](?!\]))*?)\]\]\)?([^\[]|\[(?!\[)|\[\[(?!User(\s+talk)?:))*?\d\d:\d\d,\s\d{1,2}\s\w+?\s\d\d\d\d\s\(UTC\)|class\s*=\s*"autosigned".+?\(UTC\)<\/small>)(([ \t\f]|<!--.*?-->)*(?!\S)|\S+([ \t\f]|<!--.*?-->)*)?$/gm;
+        var SIG_REGEX = /(?:\[\[\s*:?\s*(([Uu]ser(\s+talk)?|Special:Contributions\/)([^\]]||\](?!\]))*?)\]\]\)?([^\[]|\[(?!\[)|\[\[(?!User(\s+talk)?:))*?\d\d:\d\d,\s\d{1,2}\s\w+?\s\d\d\d\d\s\(UTC\)|class\s*=\s*"autosigned".+?\(UTC\)<\/small>)(([ \t\f]|<!--.*?-->)*(?!\S)|\S+([ \t\f]|<!--.*?-->)*)?$/gm;
         var matchIdx = 0;
         var match;
         var matchIdxEnd;
@@ -586,7 +586,7 @@ function loadReplyLink( $, mw ) {
 
                 // Determine the user who wrote the comment, for
                 // edit-summary and sanity-check purposes
-                var userRgx = /\[\[\s*[Uu][Ss][Ee][Rr](?:(?:\s+|_)[Tt][Aa][Ll][Kk])?\s*:\s*(.+?)(?:\/.+?)?(?:#.+?)?(?:\|.+?)?\]\]/g;
+                var userRgx = /\[\[\s*:?\s*[Uu][Ss][Ee][Rr](?:(?:\s+|_)[Tt][Aa][Ll][Kk])?\s*:\s*(.+?)(?:\/.+?)?(?:#.+?)?(?:\|.+?)?\]\]/g;
                 var userMatches = sectionWikitext.slice( 0, strIdx )
                         .match( userRgx );
                 var cmtAuthorWktxt = userRgx.exec(
