@@ -257,7 +257,7 @@ function loadReplyLink( $, mw ) {
                     }
                 }
 
-                console.log("Header " + headerCounter + " (idx " + headerMatch.index + "): >" + headerMatch[0].trim() + "<");
+                //console.log("Header " + headerCounter + " (idx " + headerMatch.index + "): >" + headerMatch[0].trim() + "<");
                 if( headerCounter === sectionIdx ) {
                     var sanitizedWktxtSectionName = wikitextToTextContent( headerMatch[2] );
 
@@ -365,7 +365,7 @@ function loadReplyLink( $, mw ) {
                 console.log("[sigIdxToStrIdx] out of matches");
                 return -1;
             }
-            console.log( "sig match (matchIdx = " + matchIdx + ") is >" + match[0] + "< (index = " + match.index + ")" );
+            //console.log( "sig match (matchIdx = " + matchIdx + ") is >" + match[0] + "< (index = " + match.index + ")" );
 
             matchIdxEnd = match.index + match[0].length;
 
@@ -412,11 +412,14 @@ function loadReplyLink( $, mw ) {
         while( ( sectionWikitext[ strIdx ] !== "\n" ) && ( counter++ <= 50 ) ) strIdx++;
 
         var slicedSecWikitext = sectionWikitext.slice( strIdx );
-        console.log("slicedSecWikitext = >>" + slicedSecWikitext.slice(0,50) + "<<");
+        //console.log("slicedSecWikitext = >>" + slicedSecWikitext.slice(0,50) + "<<");
         slicedSecWikitext = slicedSecWikitext.replace( /^\n/, "" );
         var candidateLines = slicedSecWikitext.split( "\n" );
         //console.log( "candidateLines =", candidateLines );
-        var replyLine = 0; // line number in sectionWikitext after reply
+
+        // number of the line in sectionWikitext that'll be right after reply
+        var replyLine = 0;
+
         var INDENT_RE = /^[:\*#]+/;
         if( slicedSecWikitext.trim().length > 0 ) {
             var currIndentation, currIndentationLvl, i;
@@ -431,7 +434,7 @@ function loadReplyLink( $, mw ) {
                 // Detect indentation level of current line
                 currIndentation = INDENT_RE.exec( candidateLines[i] );
                 currIndentationLvl = currIndentation ? currIndentation[0].length : 0;
-                console.log(">" + candidateLines[i] + "< => " + currIndentationLvl);
+                //console.log(i + ">" + candidateLines[i] + "< => " + currIndentationLvl);
 
                 if( currIndentationLvl <= indentLvl ) {
 
@@ -456,8 +459,11 @@ function loadReplyLink( $, mw ) {
                             break;
                         }
                     } else {
+                        //console.log( "cIL <= iL, breaking" );
                         break;
                     }
+                } else {
+                    replyLine = i + 1;
                 }
             }
             if( i === candidateLines.length ) {
