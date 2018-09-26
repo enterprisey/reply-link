@@ -598,7 +598,7 @@ function loadReplyLink( $, mw ) {
 
                 // Determine the user who wrote the comment, for
                 // edit-summary and sanity-check purposes
-                var userRgx = /\[\[\s*:?\s*[Uu][Ss][Ee][Rr](?:(?:\s+|_)[Tt][Aa][Ll][Kk])?\s*:\s*(.+?)(?:\/.+?)?(?:#.+?)?(?:\|.+?)?\]\]/g;
+                var userRgx = /\[\[\s*:?\s*[Uu][Ss][Ee][Rr](?:(?:\s+|_)[Tt][Aa][Ll][Kk])?\s*:\s*(.+?)(?:\/.+?)?(?:#.+?)?\s*(?:\|.+?)?\]\]/g;
                 var userMatches = sectionWikitext.slice( 0, strIdx )
                         .match( userRgx );
                 var cmtAuthorWktxt = userRgx.exec(
@@ -989,9 +989,10 @@ function loadReplyLink( $, mw ) {
                 "span" === node.tagName.toLowerCase() &&
                 node.className.indexOf( "localcomments" ) >= 0;
 
+            var isSmall = node.nodeType === 1 && node.tagName.toLowerCase() === "small";
+
             // Small nodes are okay, unless they're delsort notices
-            var isOkSmallNode = node.nodeType === 1 &&
-                "small" === node.tagName.toLowerCase() &&
+            var isOkSmallNode = isSmall &&
                 node.className.indexOf( "delsort-notice" ) < 0;
 
             if( ( node.nodeType === 3 ) ||
@@ -1004,7 +1005,7 @@ function loadReplyLink( $, mw ) {
                 // that means someone put a timestamp in the middle of a
                 // paragraph)
                 if( TIMESTAMP_REGEX.test( node.textContent.trim() ) &&
-                        node.previousSibling &&
+                        ( node.previousSibling || isSmall ) &&
                         ( !node.nextElementSibling ||
                             node.nextElementSibling.tagName.toLowerCase() !== "a" ) ) {
                     linkId = "reply-link-" + idNum;
