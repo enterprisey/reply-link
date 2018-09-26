@@ -550,7 +550,13 @@ function loadReplyLink( $, mw ) {
                 var replyLines = reply.split( "\n" );
                 var fullReply;
                 if( rplyToXfdNom ) {
-                    fullReply = indentation + "* " + replyLines.join( "{{pb}}" );
+                    if( replyLines.some( function ( l ) { return l.substr( 0, 1 ) === "*"; } ) ) {
+                        fullReply = replyLines.map( function ( line ) {
+                            return indentation + "*" + line;
+                        } ).join( "\n" );
+                    } else {
+                        fullReply = indentation + "* " + replyLines.join( "{{pb}}" );
+                    }
                 } else {
                     fullReply = replyLines.map( function ( line ) {
                         return indentation + ":" + line;
