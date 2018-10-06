@@ -117,6 +117,68 @@ function loadReplyLink( $, mw ) {
     }
 
     /**
+     * Is there a signature (four tildes) present in the given text,
+     * outside of a nowiki element?
+     */
+    function hasSig( text ) {
+
+        // no literal signature?
+        if( text.indexOf( SIGNATURE ) < 0 ) return false;
+
+        // if there's a literal signature and no nowiki elements,
+        // there must be a real signature
+        if( text.indexOf( "<nowiki>" ) < 0 ) return true;
+
+        // Save all nowiki spans
+        var nowikiSpanStarts = []; // list of ignored span beginnings
+        var nowikiSpanLengths = []; // list of ignored span lengths
+        var NOWIKI_RE = /<nowiki>.*?<\/nowiki>/g;
+        var spanMatch;
+        do {
+            spanMatch = NOWIKI_RE.exec( text );
+            if( spanMatch ) {
+                nowikiSpanStarts.push( spanMatch.index );
+                nowikiSpanLengths.push( spanMatch[0].length );
+            }
+        } while( spanMatch );
+
+        // So that we don't check every ignore span every time
+        var nowikiSpanStartIdx = 0;
+
+        var SIG_RE = new RegExp( SIGNATURE, "g" );
+        var sigMatch;
+
+        matchLoop:
+        do {
+            sigMatch = SIG_RE.exec( text );
+            if( sigMatch ) {
+
+                // Check that we're not inside a nowiki
+                for( var nwIdx = nowikiSpanStartIdx; nwIdx <
+                    nowikiSpanStarts.length; nwIdx++ ) {
+                    if( sigMatch.index > nowikiSpanStarts[nwIdx] ) {
+                        if ( sigMatch.index + sigMatch[0].length <=
+                            nowikiSpanStarts[nwIdx] + nowikiSpanLengths[nwIdx] ) {
+
+                            // Invalid sig
+                            continue matchLoop;
+                        } else {
+
+                            // We'll never encounter this span again, since
+                            // headers only get later and later in the wikitext
+                            nowikiSpanStartIdx = nwIdx;
+                        }
+                    }
+                }
+
+                // We aren't inside a nowiki
+                return true;
+            }
+        } while( sigMatch );
+        return false;
+    }
+
+    /**
      * Given an Element object, attempt to recover a username from it.
      * Also will check up to two elements prior to the passed element.
      * Returns null if no username was found.
@@ -540,7 +602,7 @@ function loadReplyLink( $, mw ) {
                 var reply = document.getElementById( "reply-dialog-field" ).value.trim();
 
                 // Add a signature if one isn't already there
-                if( !reply.endsWith( SIGNATURE ) ) {
+                if( !hasSig( reply ) ) {
                     reply += " " + ( window.replyLinkSigPrefix ? window.replyLinkSigPrefix : "" ) + SIGNATURE;
                 }
 
