@@ -98,7 +98,7 @@ function loadReplyLink( $, mw ) {
         // The element itself will be the text span in the h2; its
         // parent will be the h2; and the parent of the h2 is the
         // content container that we want
-        return document.querySelector( "span.mw-headline" )
+        return document.querySelector( "h2 > span.mw-headline" )
             .parentElement
             .parentElement;
     }
