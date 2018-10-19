@@ -5,6 +5,9 @@ function loadReplyLink( $, mw ) {
     var EDIT_REQ_TPL_REGEX = /\{\{edit (template|fully|extended|semi)-protected\s*(\|.+?)*\}\}/;
     var SIGNATURE = "~~" + "~~"; // split up because it might get processed
 
+    // Threshold for indentation when we offer to outdent
+    var OUTDENT_THRESH = 8;
+
     /**
      * This dictionary is some global state that holds three pieces of
      * information for each "(reply)" link (keyed by their unique IDs):
@@ -603,15 +606,30 @@ function loadReplyLink( $, mw ) {
 
                 // Add a signature if one isn't already there
                 if( !hasSig( reply ) ) {
-                    reply += " " + ( window.replyLinkSigPrefix ? window.replyLinkSigPrefix : "" ) + SIGNATURE;
+                    reply += " " + ( window.replyLinkSigPrefix ?
+                        window.replyLinkSigPrefix : "" ) + SIGNATURE;
+                }
+
+                var replyLines = reply.split( "\n" );
+
+                // If we're outdenting, reset indentation and add the
+                // outdent template. This requires that there be at least
+                // one character of indentation.
+                var outdentCheckbox = document.getElementById( "reply-link-option-outdent" );
+                if( outdentCheckbox && outdentCheckbox.checked ) {
+                    replyLines[0] = "{" + "{od|" + indentation.slice( 0, -1 ) +
+                        "}}" + replyLines[0];
+                    indentation = "";
                 }
 
                 // Compose reply by adding indentation at the beginning of
                 // each line (if not replying to an XfD nom) or {{pb}}'s
                 // between lines (if replying to an XfD nom)
-                var replyLines = reply.split( "\n" );
                 var fullReply;
                 if( rplyToXfdNom ) {
+
+                    // If there's a list in this reply, it's a bad idea to
+                    // use pb's, even though the markup'll probably be broken
                     if( replyLines.some( function ( l ) { return l.substr( 0, 1 ) === "*"; } ) ) {
                         fullReply = replyLines.map( function ( line ) {
                             return indentation + "*" + line;
@@ -919,6 +937,12 @@ function loadReplyLink( $, mw ) {
             // add the relevant option
             if( EDIT_REQ_REGEX.test( ourMetadata[1][1] ) ) {
                 newOption( "reply-link-option-edit-req", "Mark edit request as answered?", false );
+            }
+
+            // If the previous comment was indented by OUTDENT_THRESH,
+            // offer to outdent
+            if( ourMetadata[0].length >= OUTDENT_THRESH ) {
+                newOption( "reply-link-option-outdent", "Outdent?", false );
             }
 
             /* Commented out because I could never get it to work
