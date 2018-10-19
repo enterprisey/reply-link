@@ -731,15 +731,14 @@ function loadReplyLink( $, mw ) {
                         sectionWikitext );
 
                 // Build summary
+                var defaultSummmary = "Replying to " +
+                    ( rplyToXfdNom ? xfdType + " nomination by " : "" ) +
+                    cmtAuthorWktxt +
+                    ( markedEditReq ? " and marking edit request as answered" : "" );
                 var customSummaryField = document.getElementById( "reply-link-summary" );
-                var summaryCore;
+                var summaryCore = defaultSummmary;
                 if( window.replyLinkCustomSummary && customSummaryField.value ) {
                     summaryCore = customSummaryField.value.trim();
-                } else {
-                    summaryCore = "Replying to " +
-                        ( rplyToXfdNom ? xfdType + " nomination by " : "" ) +
-                        cmtAuthorWktxt +
-                        ( markedEditReq ? " and marking edit request as answered" : "" );
                 }
                 var summary = "/* " + sectionHeader + " */ " + summaryCore + ADVERT;
 
@@ -898,8 +897,9 @@ function loadReplyLink( $, mw ) {
                 " max-width: 1200px; width: 66%; margin-top: 0.5em;";
             panelEl.id = "reply-dialog-panel";
             panelEl.innerHTML = "<textarea id='reply-dialog-field' class='mw-ui-input' placeholder='Reply here!'></textarea>" +
-                ( window.replyLinkCustomSummary ? "<label for='reply-link-summary'>Summary: </label><input id='reply-link-summary' class='mw-ui-input' " +
-                    "placeholder='Edit summary' /><br />" : "" ) +
+                ( window.replyLinkCustomSummary ? "<label for='reply-link-summary'>Summary: </label>" +
+                    "<input id='reply-link-summary' class='mw-ui-input' placeholder='Edit summary' " +
+                    "value='Replying to " + cmtAuthor + "'/><br />" : "" ) +
                 "<table style='border-collapse:collapse'><tr><td id='reply-link-buttons' style='width: " +
                 ( window.replyLinkPreloadPing === "button" ? "325" : "255" ) + "px'>" +
                 "<button id='reply-dialog-button' class='mw-ui-button mw-ui-progressive'>Reply</button> " +
