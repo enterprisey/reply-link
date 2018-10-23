@@ -102,9 +102,18 @@ function loadReplyLink( $, mw ) {
         // The element itself will be the text span in the h2; its
         // parent will be the h2; and the parent of the h2 is the
         // content container that we want
-        return document.querySelector( "h2 > span.mw-headline" )
+        var candidate = document.querySelector( "h2 > span.mw-headline" )
             .parentElement
             .parentElement;
+
+        // Compatibility with User:Enterprisey/hover-edit-section
+        // That script puts each section in its own div, so we need to
+        // go out another level if it's running
+        if( candidate.className === "hover-edit-section" ) {
+            return candidate.parentElement;
+        } else {
+            return candidate;
+        }
     }
 
     /**
@@ -1053,7 +1062,7 @@ function loadReplyLink( $, mw ) {
         // If we didn't find any headers at all, that's a problem and we
         // should bail
         if( headerIndex === contentEls.length ) {
-            console.error( "Hit end of loop!" );
+            console.error( "Didn't find any headers - hit end of loop!" );
             return;
         }
 
@@ -1232,7 +1241,7 @@ function loadReplyLink( $, mw ) {
         }
 
         if( window.replyLinkCustomSummary === undefined ) {
-            window.replyLinkCustomSummary = true;
+            window.replyLinkCustomSummary = false;
         }
 
         // Insert "reply" links into DOM
