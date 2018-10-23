@@ -99,10 +99,13 @@ function loadReplyLink( $, mw ) {
      */
     function findMainContentEl() {
 
+        // Which header are we looking for?
+        var targetHeader = xfdType ? "h3" : "h2";
+
         // The element itself will be the text span in the h2; its
         // parent will be the h2; and the parent of the h2 is the
         // content container that we want
-        var candidate = document.querySelector( "h2 > span.mw-headline" )
+        var candidate = document.querySelector( targetHeader + " > span.mw-headline" )
             .parentElement
             .parentElement;
 
@@ -1119,11 +1122,16 @@ function loadReplyLink( $, mw ) {
                     // Update global metadata dictionary
                     metadata[linkId] = currIndentation;
                 }
-            } else if( /^(p|dl|dd|ul|li|span|ol)$/.test( node.tagName.toLowerCase() ) ) {
+            } else if( /^(div|p|dl|dd|ul|li|span|ol)$/.test( node.tagName.toLowerCase() ) ) {
                 switch( node.tagName.toLowerCase() ) {
                 case "dl": newIndentSymbol = ":"; break;
                 case "ul": newIndentSymbol = "*"; break;
                 case "ol": newIndentSymbol = "#"; break;
+                case "div":
+                    if( node.className !== "hover-edit-section" ) {
+                        continue;
+                    }
+                    break;
                 default: newIndentSymbol = ""; break;
                 }
 
