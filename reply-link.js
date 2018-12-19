@@ -1018,10 +1018,16 @@ function loadReplyLink( $, mw ) {
                 .addEventListener( "click", function () {
                     var sanitizedCode = document.getElementById( "reply-dialog-field" ).value
                             .replace( /&/g, "%26" );
-                    $.post( "https://en.wikipedia.org/api/rest_v1/transform/wikitext/to/html",
+                    $.post( "https://en.wikipedia.org/api/rest_v1/transform/wikitext/to/html/" + encodeURIComponent( currentPageName ),
                         "wikitext=" + sanitizedCode + "&body_only=true",
                         function ( html ) {
                             document.getElementById( "reply-link-preview" ).innerHTML = html;
+
+                            // The hrefs in the wikilinks are all given locally for some reason
+                            var links = document.querySelectorAll( "#reply-link-preview a[rel='mw:WikiLink']" );
+                            for( var i = 0, n = links.length; i < n; i++ ) {
+                                links[i].href = mw.util.getUrl( links[i].getAttribute("href").replace( /^\.\//, "" ) );
+                            }
                         } );
                 } );
 
