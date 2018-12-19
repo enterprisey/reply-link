@@ -359,6 +359,11 @@ function loadReplyLink( $, mw ) {
             headerCounter++;
         } while( headerMatch );
 
+        if( startIdx < 0 ) {
+            throw( "Could not find section named \"" + sectionName +
+                    "\" at section idx " + sectionIdx );
+        }
+
         // If we encountered no section after the target section,
         // then the target was the last one and the slice will go
         // until the end of wikitext
