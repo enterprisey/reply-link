@@ -989,19 +989,17 @@ function loadReplyLink( $, mw ) {
             // Event listener for the text area
             document.getElementById( "reply-dialog-field" )
                 .addEventListener( "input", function () {
-
-                    // If the user has started a reply, ask for a
-                    // confirmation before closing
-                    if( this.value && !window.onbeforeunload ) {
-                        window.onbeforeunload = function ( e ) {
-                            var txt = "You've started a reply but haven't posted it";
-                            e.returnValue = txt;
-                            return txt;
-                        };
-                    } else if( !this.value && window.onbeforeunload ) {
-                        window.onbeforeunload = null;
-                    }
+                    this.dataset.empty = !this.value;
                 } ); // End event listener for the text area
+
+            // Close handler
+            window.onbeforeunload = function ( e ) {
+                if( !document.getElementById( "reply-dialog-field" ).dataset.empty ) {
+                    var txt = "You've started a reply but haven't posted it";
+                    e.returnValue = txt;
+                    return txt;
+                }
+            };
 
             // Event listener for the "Reply" button
             document.getElementById( "reply-dialog-button" )
