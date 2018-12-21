@@ -960,7 +960,7 @@ function loadReplyLink( $, mw ) {
             }
 
             // If the current section header text indicates an edit request,
-            // add the relevant option
+            // offer to mark it as answered
             if( EDIT_REQ_REGEX.test( ourMetadata[1][1] ) ) {
                 newOption( "reply-link-option-edit-req", "Mark edit request as answered?", false );
             }
