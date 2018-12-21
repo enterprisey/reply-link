@@ -776,9 +776,6 @@ function loadReplyLink( $, mw ) {
                     };
                     if ( data && data.edit && data.edit.result && data.edit.result == "Success" ) {
 
-                        // User can now navigate away from the page safely
-                        window.onbeforeunload = null;
-
                         var reloadHtml = window.replyLinkAutoReload ? "automatically reloading"
                             : "<a href='javascript:window.replyLinkReload()' class='reply-link-reload'>Reload</a>";
                         setStatus( "Reply saved! (" + reloadHtml + ")" );
@@ -872,7 +869,6 @@ function loadReplyLink( $, mw ) {
             // Remove previous panel
             var prevPanel = document.getElementById( "reply-dialog-panel" );
             if( prevPanel ) {
-                window.onbeforeunload = null;
                 prevPanel.remove();
             }
 
@@ -896,9 +892,6 @@ function loadReplyLink( $, mw ) {
                 return false;
             }
 
-            // Fetch metadata about this specific comment
-            var ourMetadata = metadata[this.id];
-
             // Figure out the username of the author
             // of the comment we're replying to
             var sigNode = newLinkWrapper.previousSibling;
@@ -913,7 +906,8 @@ function loadReplyLink( $, mw ) {
             panelEl.style = "padding: 1em; margin-left: 1.6em;" +
                 " max-width: 1200px; width: 66%; margin-top: 0.5em;";
             panelEl.id = "reply-dialog-panel";
-            panelEl.innerHTML = "<textarea id='reply-dialog-field' class='mw-ui-input' placeholder='Reply here!'></textarea>" +
+            panelEl.innerHTML = "<textarea id='reply-dialog-field' class='mw-ui-input'" +
+                " placeholder='Reply here!'></textarea>" +
                 ( window.replyLinkCustomSummary ? "<label for='reply-link-summary'>Summary: </label>" +
                     "<input id='reply-link-summary' class='mw-ui-input' placeholder='Edit summary' " +
                     "value='Replying to " + cmtAuthor + "'/><br />" : "" ) +
@@ -953,6 +947,9 @@ function loadReplyLink( $, mw ) {
                 document.getElementById( "reply-link-options" ).appendChild( newLabel );
             }
 
+            // Fetch metadata about this specific comment
+            var ourMetadata = metadata[this.id];
+
             // If the dry-run option is "checkbox", add an option to make it
             // a dry run
             if( window.replyLinkDryRun === "checkbox" ) {
@@ -986,30 +983,35 @@ function loadReplyLink( $, mw ) {
                 sel.addRange( range );
             }*/
 
-            // Event listener for the text area
-            document.getElementById( "reply-dialog-field" )
-                .addEventListener( "input", function () {
-                    this.dataset.empty = !this.value;
-                } ); // End event listener for the text area
-
             // Close handler
             window.onbeforeunload = function ( e ) {
-                if( !document.getElementById( "reply-dialog-field" ).dataset.empty ) {
+                if( document.getElementById( "reply-dialog-field" ) &&
+                        document.getElementById( "reply-dialog-field" ).value ) {
                     var txt = "You've started a reply but haven't posted it";
                     e.returnValue = txt;
                     return txt;
                 }
             };
 
+            // Called by the "Reply" button and Ctrl-Enter in the text area
+            function startReply() {
+                // ourMetadata contains data in the format:
+                // [indentation, header, sigIdx]
+                doReply( ourMetadata[0], ourMetadata[1], ourMetadata[2],
+                    cmtAuthor, rplyToXfdNom );
+            }
+
             // Event listener for the "Reply" button
             document.getElementById( "reply-dialog-button" )
-                .addEventListener( "click", function () {
+                .addEventListener( "click", startReply );
 
-                    // ourMetadata contains data in the format:
-                    // [indentation, header, sigIdx]
-                    doReply( ourMetadata[0], ourMetadata[1], ourMetadata[2],
-                        cmtAuthor, rplyToXfdNom );
-                } ); // End event listener for the "Reply" button
+            // Event listener for the text area
+            document.getElementById( "reply-dialog-field" )
+                .addEventListener( "keydown", function ( e ) {
+                    if( e.ctrlKey && ( e.keyCode == 10 || e.keyCode == 13 ) ) {
+                        startReply();
+                    }
+                } );
 
             // Event listener for the "Preview" button
             document.getElementById( "reply-link-preview-button" )
@@ -1042,7 +1044,6 @@ function loadReplyLink( $, mw ) {
                 .addEventListener( "click", function () {
                     newLink.textContent = linkLabel;
                     panelEl.remove();
-                    window.onbeforeunload = null;
                 } );
 
             // Cancel default event handler
