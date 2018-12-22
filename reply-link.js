@@ -63,6 +63,12 @@ function loadReplyLink( $, mw ) {
     };
 
     /**
+     * When the reply is saved via API, this flag is set to true to
+     * disable the onbeforeunload handler.
+     */
+    var replyWasSaved = false;
+
+    /**
      * This function converts any (index-able) iterable into a list.
      */
     function iterableToList( nl ) {
@@ -780,6 +786,10 @@ function loadReplyLink( $, mw ) {
                         var reloadHtml = window.replyLinkAutoReload ? "automatically reloading"
                             : "<a href='javascript:window.replyLinkReload()' class='reply-link-reload'>Reload</a>";
                         setStatus( "Reply saved! (" + reloadHtml + ")" );
+
+                        // Required to permit reload to happen, checked in onbeforeunload
+                        replyWasSaved = true;
+
                         if( window.replyLinkAutoReload ) {
                             window.replyLinkReload();
                         }
@@ -986,7 +996,8 @@ function loadReplyLink( $, mw ) {
 
             // Close handler
             window.onbeforeunload = function ( e ) {
-                if( document.getElementById( "reply-dialog-field" ) &&
+                if( !replyWasSaved &&
+                        document.getElementById( "reply-dialog-field" ) &&
                         document.getElementById( "reply-dialog-field" ).value ) {
                     var txt = "You've started a reply but haven't posted it";
                     e.returnValue = txt;
