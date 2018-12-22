@@ -697,7 +697,7 @@ function loadReplyLink( $, mw ) {
 
                 // Determine the user who wrote the comment, for
                 // edit-summary and sanity-check purposes
-                var userRgx = /\[\[\s*:?\s*[Uu][Ss][Ee][Rr](?:(?:\s+|_)[Tt][Aa][Ll][Kk])?\s*:\s*(.+?)(?:\/.+?)?(?:#.+?)?\s*(?:\|.+?)?\]\]/g;
+                var userRgx = /\[\[\s*:?\s*(?:[Uu][Ss][Ee][Rr](?:(?:\s+|_)[Tt][Aa][Ll][Kk])?\s*:|Special:Contributions\/)\s*(.+?)(?:\/.+?)?(?:#.+?)?\s*(?:\|.+?)?\]\]/g;
                 var userMatches = sectionWikitext.slice( 0, strIdx )
                         .match( userRgx );
                 var cmtAuthorWktxt = userRgx.exec(
