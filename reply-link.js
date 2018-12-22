@@ -1,3 +1,4 @@
+// vim: ts=4 sw=4 et
 //<nowiki>
 function loadReplyLink( $, mw ) {
     var TIMESTAMP_REGEX = /\(UTC(?:(?:−|\+)\d+?(?:\.\d+)?)?\)\S*?$/m;
