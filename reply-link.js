@@ -246,6 +246,19 @@ function loadReplyLink( $, mw ) {
     }
 
     /**
+     * Given a reply-link-wrapper span, attempts to find who wrote
+     * the comment that precedes it.
+     */
+    function getCommentAuthor( wrapper ) {
+        var sigNode = wrapper.previousSibling;
+        var possUserLinkElem = ( sigNode.nodeType === 1 &&
+                sigNode.tagName.toLowerCase() === "small" )
+            ? sigNode.children[sigNode.children.length-1]
+            : sigNode.previousElementSibling;
+        return findUsernameInElem( possUserLinkElem );
+    }
+
+    /**
      * Given the wikitext of a section, attempt to find the first edit
      * request template in it, and then mark that template as answered.
      * Returns the modified section wikitext.
@@ -598,9 +611,11 @@ function loadReplyLink( $, mw ) {
      * in which case we should use an asterisk instead of a colon.
      * cmtAuthorDom is the username of the person who wrote the comment
      * we're replying to, parsed from the DOM.
+     *
+     * Returns a Deferred that resolves/rejects when the reply succeeds/fails.
      */
     function doReply( indentation, header, sigIdx, cmtAuthorDom, rplyToXfdNom ) {
-        var wikitext;
+        var wikitext, deferred = $.Deferred();
 
         // Change UI to make it clear we're performing an operation
         document.getElementById( "reply-dialog-field" ).style["background-image"] =
@@ -748,7 +763,8 @@ function loadReplyLink( $, mw ) {
                     console.log( sectionWikitext );
                     setStatus( "Check the console for the dry-run results." );
                     document.querySelector( "#reply-link-buttons button" ).disabled = false;
-                    return;
+                    deferred.resolve();
+                    return deferred;
                 }
 
                 var newWikitext = wikitext.replace( oldSectionWikitext,
@@ -793,6 +809,8 @@ function loadReplyLink( $, mw ) {
                         if( window.replyLinkAutoReload ) {
                             window.replyLinkReload();
                         }
+
+                        deferred.resolve();
                     } else {
                         if( data && data.edit && data.edit.spamblacklist ) {
                             setStatus( "Error! Your post contained a link on the <a href=" +
@@ -804,6 +822,8 @@ function loadReplyLink( $, mw ) {
                             setStatus( "While saving, the edit query returned an error." +
                                 " Check the browser console for more information." );
                         }
+
+                        deferred.reject();
                     }
                     console.log(data);
                     document.getElementById( "reply-dialog-field" ).style["background-image"] = "";
@@ -811,6 +831,7 @@ function loadReplyLink( $, mw ) {
                     setStatus( "While replying, the edit failed." );
                     console.log(code);
                     console.log(result);
+                    deferred.reject();
                 } );
             } catch ( e ) {
                 setStatus( "There was an error while replying! Please leave a note at " +
@@ -819,11 +840,15 @@ function loadReplyLink( $, mw ) {
                 if( e.message ) {
                     console.log( "Content request error: " + JSON.stringify( e.message ) );
                 }
+                deferred.reject();
                 throw e;
             }
         } ).fail( function () {
             setStatus( "While getting the wikitext, there was an AJAX error." );
+            deferred.reject();
         } );
+
+        return deferred;
     }
 
     /**
@@ -905,12 +930,7 @@ function loadReplyLink( $, mw ) {
 
             // Figure out the username of the author
             // of the comment we're replying to
-            var sigNode = newLinkWrapper.previousSibling;
-            var possUserLinkElem = ( sigNode.nodeType === 1 &&
-                sigNode.tagName.toLowerCase() === "small" )
-                ? sigNode.children[sigNode.children.length-1]
-                : sigNode.previousElementSibling;
-            var cmtAuthor = findUsernameInElem( possUserLinkElem );
+            var cmtAuthor = getCommentAuthor( newLinkWrapper );
 
             // Create panel
             var panelEl = document.createElement( "div" );
@@ -1229,7 +1249,53 @@ function loadReplyLink( $, mw ) {
         //console.log(metadata);
     }
 
-    function onReady () {
+    function runTestMode() {
+
+        // We never want to make actual edits
+        window.replyLinkDryRun = "always";
+
+        // Simulate having a panel open
+        $( "#mw-content-text" )
+            .append( $( "<div>" )
+                .append( $( "<textarea>" ).attr( "id", "reply-dialog-field" ).val( "hi" ) )
+                .append( $( "<div>" ).attr( "id", "reply-link-buttons" )
+                    .append( $( "<button> " ) ) ) );
+
+        // Statistics variables
+        var successes = 0, failures = 0;
+
+        // Run one test on a wraper link
+        function runOneTestOn( wrapper ) {
+            var ourMetadata = metadata[ wrapper.children[0].id ];
+            try {
+                doReply( ourMetadata[0], ourMetadata[1], ourMetadata[2],
+                        getCommentAuthor( wrapper ), false ).done( function () {
+                            wrapper.style.background = "green";
+                            successes++;
+                        } ).fail( function () {
+                            wrapper.style.background = "red";
+                            failures++;
+                        } );
+            } catch ( e ) {
+                console.error( e );
+            }
+        }
+
+        var wrappers = Array.from( document.querySelectorAll( ".reply-link-wrapper" ) );
+        function runOneTest() {
+            var wrapper = wrappers.shift();
+            if( wrapper ) {
+                runOneTestOn( wrapper );
+                setTimeout( runOneTest, 250 );
+            } else {
+                var results = successes + " successes, " + failures + " failures";
+                $( "#mw-content-text" ).prepend( results ).append( results );
+            }
+        }
+        setTimeout( runOneTest, 0 );
+    }
+
+    function onReady() {
 
         // Exit if history page or edit page
         if( mw.config.get( "wgAction" ) === "history" ) return;
@@ -1274,8 +1340,18 @@ function loadReplyLink( $, mw ) {
             window.replyLinkCustomSummary = false;
         }
 
+        if( window.replyLinkTestMode === undefined ) {
+            window.replyLinkTestMode = false;
+        }
+
         // Insert "reply" links into DOM
         attachLinks();
+
+        // If test mode is enabled, create a link for that
+        if( window.replyLinkTestMode ) {
+            mw.util.addPortletLink( "p-cactions", "#", "reply-link test mode", "pt-reply-link-test" )
+                .addEventListener( "click", runTestMode );
+        }
 
         // This large string creats the "pending" texture
         window.replyLinkPendingImageUrl = "data:image/gif;base64,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";
