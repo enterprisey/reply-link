@@ -725,11 +725,13 @@ function loadReplyLink( $, mw ) {
                         userMatches[userMatches.length - 1] )[1];
 
                 // Normalize case, because that's what happens during
-                // wikitext-to-HTML processing
-                cmtAuthorWktxt = cmtAuthorWktxt.charAt( 0 ).toUpperCase() +
-                    cmtAuthorWktxt.substr( 1 );
-                cmtAuthorDom = cmtAuthorDom.charAt( 0 ).toUpperCase() +
-                    cmtAuthorDom.substr( 1 );
+                // wikitext-to-HTML processing; also underscores to spaces
+                function sanitizeUsername( u ) {
+                    u = u.charAt( 0 ).toUpperCase() + u.substr( 1 );
+                    return u.replace( /_/g, " " );
+                }
+                cmtAuthorWktxt = sanitizeUsername( cmtAuthorWktxt );
+                cmtAuthorDom = sanitizeUsername( cmtAuthorDom );
 
                 // Sanity check: is the sig username the same as the DOM one?
                 // We attempt to check sigRedirectMapping in case the naive
