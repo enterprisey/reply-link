@@ -1370,7 +1370,11 @@ function loadReplyLink( $, mw ) {
     // Also enable on T:TDYK and its subpages
     var ttdykPage = mw.config.get( "wgPageName" ).indexOf( TTDYK ) === 0;
 
-    if ( currNamespace % 2 === 1 || currNamespace === 4 || ttdykPage ) {
+    // Normal "read" view and not a diff view
+    var normalView = mw.config.get( "wgIsArticle" ) &&
+            !mw.config.get( "wgDiffOldId" );
+
+    if ( normalView && ( currNamespace % 2 === 1 || currNamespace === 4 || ttdykPage ) ) {
         mw.loader.load( "mediawiki.ui.input", "text/css" );
         mw.loader.using( [ "mediawiki.util", "mediawiki.api" ] ).then( function () {
             mw.hook( "wikipage.content" ).add( onReady );
