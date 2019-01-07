@@ -1,7 +1,7 @@
 // vim: ts=4 sw=4 et
 //<nowiki>
 function loadReplyLink( $, mw ) {
-    var TIMESTAMP_REGEX = /\(UTC(?:(?:−|\+)\d+?(?:\.\d+)?)?\)\S*?$/m;
+    var TIMESTAMP_REGEX = /\(UTC(?:(?:−|\+)\d+?(?:\.\d+)?)?\)\S*?\s*$/m;
     var EDIT_REQ_REGEX = /^((Semi|Template|Extended-confirmed)-p|P)rotected edit request on \d\d? \w+ \d{4}/;
     var EDIT_REQ_TPL_REGEX = /\{\{edit (template|fully|extended|semi)-protected\s*(\|.+?)*\}\}/;
     var SIGNATURE = "~~" + "~~"; // split up because it might get processed
@@ -310,7 +310,8 @@ function loadReplyLink( $, mw ) {
     function getCommentAuthor( wrapper ) {
         var sigNode = wrapper.previousSibling;
         var possUserLinkElem = ( sigNode.nodeType === 1 &&
-                sigNode.tagName.toLowerCase() === "small" )
+                sigNode.tagName.toLowerCase() === "small" &&
+                sigNode.children.length > 1 )
             ? sigNode.children[sigNode.children.length-1]
             : sigNode.previousElementSibling;
         return findUsernameInElem( possUserLinkElem );
@@ -352,19 +353,25 @@ function loadReplyLink( $, mw ) {
         if( recordPath === undefined ) recordPath = false;
         var path = [];
         var lcTag;
+        function isActualContainer( node, nodeLcTag ) {
+            if( nodeLcTag === undefined ) nodeLcTag = node.tagName.toLowerCase();
+            return /dd|li/.test( nodeLcTag ) ||
+                    ( nodeLcTag === "p" &&
+                        ( node.parentNode.className === "mw-parser-output" ||
+                            ( node.parentNode.tagName.toLowerCase() === "section" &&
+                                node.parentNode.dataset.mwSectionId ) ) );
+        }
         do {
             currNode = currNode.parentNode;
+            console.log("asc",currNode);
             lcTag = currNode.tagName.toLowerCase();
             if( lcTag === "html" ) {
                 console.error( "ascendToCommentContainer reached root" );
                 break;
             }
             if( recordPath ) path.unshift( currNode );
-        } while( !/dd|li/.test( lcTag ) &&
-            !( lcTag === "p" &&
-                ( currNode.parentNode.className === "mw-parser-output" ||
-                    ( currNode.parentNode.tagName.toLowerCase() === "section" &&
-                        currNode.parentNode.dataset.mwSectionId ) ) ) );
+        } while( !isActualContainer( currNode, lcTag ) &&
+            !( lcTag === "small" && isActualContainer( currNode.parentNode ) ) );
         return recordPath ? path : currNode;
     }
 
@@ -376,13 +383,25 @@ function loadReplyLink( $, mw ) {
      * psd = Parsoid, live = in the current, live page DOM.
      */
     function getCorrCmt( psdDom, sigLinkElem ) {
+        
+        // Does this node have a timestamp in it?
+        function hasTimestamp( node ) {
+            console.log (node, node.nodeType === 3,
+                        TIMESTAMP_REGEX.test( node.textContent.trim() ),
+                    node.childNodes.length === 1,
+                        node.childNodes.length && TIMESTAMP_REGEX.test( node.childNodes[0].textContent.trim()));
+            return ( node.nodeType === 3 &&
+                        TIMESTAMP_REGEX.test( node.textContent.trim() ) ) ||
+                   ( node.childNodes.length === 1 &&
+                        TIMESTAMP_REGEX.test( node.childNodes[0].textContent.trim() ) );
+        }
 
         // Get prefix that's the actual comment
         function getPrefixComment( theNodes ) {
             var prefix = [];
             for( var j = 0; j < theNodes.length; j++ ) {
                 prefix.push( theNodes[j] );
-                if( TIMESTAMP_REGEX.test( theNodes[j].textContent ) ) break;
+                if( hasTimestamp( theNodes[j] ) ) break;
             }
             return prefix;
         }
@@ -403,13 +422,13 @@ function loadReplyLink( $, mw ) {
 
         /** From a "container elem" (dd, li, or p), remove all but the first comment. */
         function onlyFirstComment( container ) {
-            if( container.children[0].tagName.toLowerCase() === "small" ) {
+            console.log("onlyFirstComment",container.childNodes);
+            if( container.children.length === 1 && container.children[0].tagName.toLowerCase() === "small" ) {
                 container = container.children[0];
             }
             var i, childNodes = container.childNodes;
             for( i = 0; i < childNodes.length; i++ ) {
-                if( childNodes[i].nodeType === 3 &&
-                        TIMESTAMP_REGEX.test( childNodes[i].textContent ) ) break;
+                if( hasTimestamp( childNodes[i] ) ) break;
             }
             if( i === childNodes.length ) {
                 throw new Error( "[onlyFirstComment] No timestamp found" );
@@ -434,6 +453,7 @@ function loadReplyLink( $, mw ) {
             }
         }
         var livePath = ascendToCommentContainer( sigLinkElem, /* recordPath */ true );
+        console.log("livePath",livePath)
 
         // Deal with the case where the comment has multiple links to
         // sigLinkElem's href; we will store the index of the link we want.
@@ -443,9 +463,11 @@ function loadReplyLink( $, mw ) {
         if( !liveDupeLinks ) throw new Error( "Couldn't select live dupe link" );
         var liveDupeLinkIdx = ( liveDupeLinks.length > 1 )
                 ? iterableToList( liveDupeLinks ).indexOf( sigLinkElem ) : null;
+        console.log(liveDupeLinkIdx);
 
         var liveClone = livePath[0].cloneNode( /* deep */ true );
         onlyFirstComment( liveClone );
+        console.log(liveClone.childNodes);
 
         // Process it a bit to make it look a bit more like the Parsoid output
         var liveAutoNumberedLinks = liveClone.querySelectorAll( "a.external.autonumber" );
@@ -461,6 +483,7 @@ function loadReplyLink( $, mw ) {
         // operation a second time, even though we already called onlyFirstComment
         // on it.
         var liveTextContent = surrTextContentFromElem( liveClone );
+        console.log("liveTextContent",liveTextContent);
 
         var selector = livePath.map( function ( node ) {
             return node.tagName.toLowerCase();
@@ -469,13 +492,14 @@ function loadReplyLink( $, mw ) {
         // TODO: Optimization opportunity - run querySelectorAll only on the
         // section that we know contains the comment
         var psdLinks = psdDom.querySelectorAll( selector );
-        //console.log(psdLinks);
+        console.log(psdLinks);
 
         // Narrow down by entire textContent of list element
         var psdCorrLinks = []; // the corresponding link elem(s)
         if( liveDupeLinkIdx === null ) {
             for( var i = 0; i < psdLinks.length; i++ ) {
                 var psdTextContent = surrTextContentFromElem( ascendToCommentContainer( psdLinks[i] ) );
+                console.log(psdTextContent);
                 if( psdTextContent === liveTextContent ) {
                     psdCorrLinks.push( psdLinks[i] );
                 }
@@ -485,6 +509,7 @@ function loadReplyLink( $, mw ) {
                 var psdContainer = ascendToCommentContainer( psdLinks[i] );
                 if( psdContainer.dataset.replyLinkGeCorrCo ) continue;
                 var psdTextContent = surrTextContentFromElem( psdContainer );
+                console.log(psdTextContent);
                 if( psdTextContent === liveTextContent ) {
                     var psdDupeLinks = psdContainer.querySelectorAll( "a[href='" + newHref + "']" );
                     psdCorrLinks.push( psdDupeLinks[ liveDupeLinkIdx ] );
@@ -494,9 +519,9 @@ function loadReplyLink( $, mw ) {
         }
 
         if( psdCorrLinks.length === 0 ) {
-            throw( "Failed to find a matching comment in the Parsoid DOM." );
+            throw new Error( "Failed to find a matching comment in the Parsoid DOM." );
         } else if( psdCorrLinks.length > 1 ) {
-            throw( "Found multiple matching comments in the Parsoid DOM." );
+            throw new Error( "Found multiple matching comments in the Parsoid DOM." );
         }
 
         return psdCorrLinks[0];
@@ -741,8 +766,10 @@ function loadReplyLink( $, mw ) {
         var DELSORT_SPAN_RE_TXT = /<small class="delsort-notice">(?:<small>.+?<\/small>|.)+?<\/small>/.source;
         var XFD_RELIST_RE_TXT = /<div class="xfd_relist"[\s\S]+?<\/div>(\s*|<!--.+?-->)*/.source;
         var TEMPLATES_RE_TXT = /\{\{moved discussion (to|from)\|.+?\}\}/.source;
+        var STRUCK_RE_TXT = /<s>.+?<\/s>/.source;
         var SKIP_REGION_RE = new RegExp("(" + DELSORT_SPAN_RE_TXT + ")|(" +
             XFD_RELIST_RE_TXT + ")|(" +
+            STRUCK_RE_TXT + ")|(" +
             TEMPLATES_RE_TXT + ")", "ig");
         var skipRegionMatch;
         do {
@@ -782,7 +809,7 @@ function loadReplyLink( $, mw ) {
                 console.log("[sigIdxToStrIdx] out of matches");
                 return -1;
             }
-            //console.log( "sig match (matchIdx = " + matchIdx + ") is >" + match[0] + "< (index = " + match.index + ")" );
+            console.log( "sig match (matchIdx = " + matchIdx + ") is >" + match[0] + "< (index = " + match.index + ")" );
 
             matchIdxEnd = match.index + match[0].length;
 
@@ -1226,9 +1253,18 @@ function loadReplyLink( $, mw ) {
 
             // Figure out the username of the author
             // of the comment we're replying to
-            var cmtAuthorAndLink = getCommentAuthor( newLinkWrapper ),
-                cmtAuthor = cmtAuthorAndLink.username,
-                cmtLink = cmtAuthorAndLink.link;
+            var cmtAuthorAndLink = getCommentAuthor( newLinkWrapper );
+
+            try {
+                var cmtAuthor = cmtAuthorAndLink.username,
+                    cmtLink = cmtAuthorAndLink.link;
+            } catch ( e ) {
+                console.error( e );
+
+                // Cancel default event handler
+                evt.preventDefault();
+                return false;
+            }
 
             // Create panel
             var panelEl = document.createElement( "div" );
@@ -1461,7 +1497,7 @@ function loadReplyLink( $, mw ) {
                 // having normal text afterwards, which is rejected (because
                 // that means someone put a timestamp in the middle of a
                 // paragraph)
-                if( TIMESTAMP_REGEX.test( node.textContent.trim() ) &&
+                if( TIMESTAMP_REGEX.test( node.textContent ) &&
                         ( node.previousSibling || isSmall ) &&
                         ( !node.nextElementSibling ||
                             node.nextElementSibling.tagName.toLowerCase() !== "a" ) ) {
