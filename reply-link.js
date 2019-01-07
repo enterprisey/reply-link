@@ -6,6 +6,8 @@ function loadReplyLink( $, mw ) {
     var EDIT_REQ_TPL_REGEX = /\{\{edit (template|fully|extended|semi)-protected\s*(\|.+?)*\}\}/;
     var SIGNATURE = "~~" + "~~"; // split up because it might get processed
     var ADVERT = " ([[User:Enterprisey/reply-link|reply-link]])";
+    var PARSOID_ENDPOINT = "https://en.wikipedia.org/api/rest_v1/page/html/";
+    var HEADER_SELECTOR = "h1,h2,h3,h4,h5,h6";
 
     // T:TDYK, used at the end of loadReplyLink
     var TTDYK = "Template:Did_you_know_nominations";
@@ -75,8 +77,9 @@ function loadReplyLink( $, mw ) {
      * This function converts any (index-able) iterable into a list.
      */
     function iterableToList( nl ) {
-        var arr = new Array( nl.length );
-        for(var i=-1,l=nl.length;++i!==l;arr[i]=nl[i]);
+        var len = nl.length;
+        var arr = new Array( len );
+        for( var i = 0; i < len; i++ ) arr[i] = nl[i];
         return arr;
     }
 
@@ -100,6 +103,21 @@ function loadReplyLink( $, mw ) {
         statusElement.fadeOut( function () {
             statusElement.html( status ).fadeIn( callback );
         } );
+    }
+
+    /**
+     * Sets the panel status when an error happened. Good for use in
+     * catch blocks.
+     */
+    function setStatusError( e ) {
+        console.error(e);
+        setStatus( "There was an error while replying! Please leave a note at " +
+            "<a href='https://en.wikipedia.org/wiki/User_talk:Enterprisey/reply-link'>the script's talk page</a>" +
+            " with any errors in the browser console, if possible." );
+        if( e.message ) {
+            console.log( "Content request error: " + JSON.stringify( e.message ) );
+        }
+        throw e;
     }
 
     /**
@@ -129,6 +147,32 @@ function loadReplyLink( $, mw ) {
         } else {
             return candidate;
         }
+    }
+
+    /**
+     * Gets the wikitext of a page with the given title (namespace required).
+     * Returns an object with keys "content" and "timestamp".
+     */
+    function getWikitext( title ) {
+        return $.getJSON(
+            mw.util.wikiScript( "api" ),
+            {
+                format: "json",
+                action: "query",
+                prop: "revisions",
+                rvprop: "content",
+                rvslots: "main",
+                rvlimit: 1,
+                titles: title
+            }
+        ).then( function ( data ) {
+            var pageId = Object.keys( data.query.pages )[0];
+            if( data.query.pages[pageId].revisions ) {
+                var revObj = data.query.pages[pageId].revisions[0];
+                return { timestamp: revObj.timestamp, content: revObj.slots.main["*"] };
+            }
+            return {};
+        } );
     }
 
     /**
@@ -209,7 +253,12 @@ function loadReplyLink( $, mw ) {
     /**
      * Given an Element object, attempt to recover a username from it.
      * Also will check up to two elements prior to the passed element.
-     * Returns null if no username was found.
+     * Returns null if no username was found. Otherwise, returns an
+     * object with these properties:
+     *
+     *  - username: The username that we found.
+     *  - link: The DOM object for the link from which we got the
+     *    username.
      */
     function findUsernameInElem( el ) {
         if( !el ) return null;
@@ -229,8 +278,8 @@ function loadReplyLink( $, mw ) {
                 link = links[j];
 
                 if( link.className.indexOf( "mw-selflink" ) >= 0 ) {
-                    return currentPageName.replace( "User_talk:", "" )
-                        .replace( /_/g, " " );
+                    return { username: currentPageName.replace( "User_talk:", "" )
+                        .replace( /_/g, " " ), link: link };
                 }
 
                 // Also matches redlinks. Why people have redlinks in their sigs on
@@ -239,8 +288,11 @@ function loadReplyLink( $, mw ) {
                     /^\/(?:wiki\/(?:User(?:_talk)?:|Special:Contributions\/)(.+?)(?:\/.+?)?(?:#.+)?|w\/index\.php\?title=User(?:_talk)?:(.+?)&action=edit&redlink=1)?$/
                     .exec( link.getAttribute( "href" ) );
                 if( usernameMatch ) {
-                    return decodeURIComponent( usernameMatch[1] ? usernameMatch[1]
-                        : usernameMatch[2] ).replace( /_/g, " " );
+                    var rawUsername = usernameMatch[1] ? usernameMatch[1] : usernameMatch[2];
+                    return {
+                        username: decodeURIComponent( rawUsername ).replace( /_/g, " " ),
+                        link: link 
+                    };
                 }
             }
 
@@ -252,7 +304,8 @@ function loadReplyLink( $, mw ) {
 
     /**
      * Given a reply-link-wrapper span, attempts to find who wrote
-     * the comment that precedes it.
+     * the comment that precedes it. For information about the return
+     * value, see the documentation for findUsernameInElem.
      */
     function getCommentAuthor( wrapper ) {
         var sigNode = wrapper.previousSibling;
@@ -290,6 +343,262 @@ function loadReplyLink( $, mw ) {
             );
         }
         return sectionWikitext;
+    }
+
+    /**
+     * Ascend until dd or li, or a p directly under div.mw-parser-output
+     */
+    function ascendToCommentContainer( currNode, recordPath ) {
+        if( recordPath === undefined ) recordPath = false;
+        var path = [];
+        var lcTag;
+        do {
+            currNode = currNode.parentNode;
+            lcTag = currNode.tagName.toLowerCase();
+            if( lcTag === "html" ) {
+                console.error( "ascendToCommentContainer reached root" );
+                break;
+            }
+            if( recordPath ) path.unshift( currNode );
+        } while( !/dd|li/.test( lcTag ) &&
+            !( lcTag === "p" &&
+                ( currNode.parentNode.className === "mw-parser-output" ||
+                    ( currNode.parentNode.tagName.toLowerCase() === "section" &&
+                        currNode.parentNode.dataset.mwSectionId ) ) ) );
+        return recordPath ? path : currNode;
+    }
+
+    /**
+     * Given a Parsoid DOM and a link in the live DOM that is the link at the
+     * end of a signature, return the corresponding element in the Parsoid DOM
+     * that represents the same comment.
+     *
+     * psd = Parsoid, live = in the current, live page DOM.
+     */
+    function getCorrCmt( psdDom, sigLinkElem ) {
+
+        // Get prefix that's the actual comment
+        function getPrefixComment( theNodes ) {
+            var prefix = [];
+            for( var j = 0; j < theNodes.length; j++ ) {
+                prefix.push( theNodes[j] );
+                if( TIMESTAMP_REGEX.test( theNodes[j].textContent ) ) break;
+            }
+            return prefix;
+        }
+
+        /**
+         * From a "container elem" (like the whole dd, li, or p that has a
+         * comment), get the prefix that ends in a timestamp (because other
+         * comments might be after the timestamp), and return the text content.
+         */
+        function surrTextContentFromElem( elem ) {
+            var surrListElemNodes = elem.childNodes;
+
+            // nodeType 8 is for comments
+            return getPrefixComment( surrListElemNodes )
+                    .map( function ( c ) { return ( c.nodeType !== 8 ) ? c.textContent : ""; } )
+                    .join( "" ).trim();
+        }
+
+        /** From a "container elem" (dd, li, or p), remove all but the first comment. */
+        function onlyFirstComment( container ) {
+            if( container.children[0].tagName.toLowerCase() === "small" ) {
+                container = container.children[0];
+            }
+            var i, childNodes = container.childNodes;
+            for( i = 0; i < childNodes.length; i++ ) {
+                if( childNodes[i].nodeType === 3 &&
+                        TIMESTAMP_REGEX.test( childNodes[i].textContent ) ) break;
+            }
+            if( i === childNodes.length ) {
+                throw new Error( "[onlyFirstComment] No timestamp found" );
+            }
+            i++;
+            var elemToRemove;
+            while( elemToRemove = container.childNodes[i] ) {
+                container.removeChild( elemToRemove );
+            }
+        }
+
+        // Convert live href to psd href
+        var newHref, liveHref = sigLinkElem.getAttribute( "href" );
+        if( sigLinkElem.className.indexOf( "mw-selflink" ) >= 0 ) {
+            newHref = "./" + currentPageName; 
+        } else {
+            if( /^\/wiki/.test( liveHref ) ) {
+                newHref = liveHref.replace( /^\/wiki/, "." );
+            } else {
+                var REDLINK_HREF_RGX = /^\/w\/index\.php\?title=(User(?:_talk)?:.+?)&action=edit&redlink=1$/;
+                newHref = "./" + REDLINK_HREF_RGX.exec( liveHref )[1];
+            }
+        }
+        var livePath = ascendToCommentContainer( sigLinkElem, /* recordPath */ true );
+
+        // Deal with the case where the comment has multiple links to
+        // sigLinkElem's href; we will store the index of the link we want.
+        // null means there aren't multiple links.
+        var liveDupeLinks = livePath[0].querySelectorAll( "a" +
+                ( liveHref ? ( "[href='" + liveHref + "']" ) : ".mw-selflink" ) );
+        if( !liveDupeLinks ) throw new Error( "Couldn't select live dupe link" );
+        var liveDupeLinkIdx = ( liveDupeLinks.length > 1 )
+                ? iterableToList( liveDupeLinks ).indexOf( sigLinkElem ) : null;
+
+        var liveClone = livePath[0].cloneNode( /* deep */ true );
+        onlyFirstComment( liveClone );
+
+        // Process it a bit to make it look a bit more like the Parsoid output
+        var liveAutoNumberedLinks = liveClone.querySelectorAll( "a.external.autonumber" );
+        for( var i = 0; i < liveAutoNumberedLinks.length; i++ ) {
+            liveAutoNumberedLinks[i].textContent = "";
+        }
+        var liveSelflinks = liveClone.querySelectorAll( "a.mw-selflink.selflink" );
+        for( var i = 0; i < liveSelflinks.length; i++ ) {
+            liveSelflinks[i].href = "/wiki/" + currentPageName;
+        }
+
+        // TODO: Optimization - surrTextContentFromElem does the prefixing
+        // operation a second time, even though we already called onlyFirstComment
+        // on it.
+        var liveTextContent = surrTextContentFromElem( liveClone );
+
+        var selector = livePath.map( function ( node ) {
+            return node.tagName.toLowerCase();
+        } ).join( " " ) + " a[href='" + newHref + "']";
+
+        // TODO: Optimization opportunity - run querySelectorAll only on the
+        // section that we know contains the comment
+        var psdLinks = psdDom.querySelectorAll( selector );
+        //console.log(psdLinks);
+
+        // Narrow down by entire textContent of list element
+        var psdCorrLinks = []; // the corresponding link elem(s)
+        if( liveDupeLinkIdx === null ) {
+            for( var i = 0; i < psdLinks.length; i++ ) {
+                var psdTextContent = surrTextContentFromElem( ascendToCommentContainer( psdLinks[i] ) );
+                if( psdTextContent === liveTextContent ) {
+                    psdCorrLinks.push( psdLinks[i] );
+                }
+            }
+        } else {
+            for( var i = 0; i < psdLinks.length; i++ ) {
+                var psdContainer = ascendToCommentContainer( psdLinks[i] );
+                if( psdContainer.dataset.replyLinkGeCorrCo ) continue;
+                var psdTextContent = surrTextContentFromElem( psdContainer );
+                if( psdTextContent === liveTextContent ) {
+                    var psdDupeLinks = psdContainer.querySelectorAll( "a[href='" + newHref + "']" );
+                    psdCorrLinks.push( psdDupeLinks[ liveDupeLinkIdx ] );
+                }
+                psdContainer.dataset.replyLinkGeCorrCo = true;
+            }
+        }
+
+        if( psdCorrLinks.length === 0 ) {
+            throw( "Failed to find a matching comment in the Parsoid DOM." );
+        } else if( psdCorrLinks.length > 1 ) {
+            throw( "Found multiple matching comments in the Parsoid DOM." );
+        }
+
+        return psdCorrLinks[0];
+    }
+
+    /**
+     * Given the Parsoid output (GET /page/html endpoint) on the current
+     * page and a DOM object in the current page corresponding to a
+     * link in a signature, locate the section containing that
+     * comment. That section may not be in the current page! Returns an
+     * object with four properties:
+     *
+     *  - page: The full title of the page directly containing the
+     *    comment (in its wikitext, not through transclusion).
+     *  - sectionIdx: The anticipated wikitext section index containing
+     *    the comment. That is, our best guess as to what the section
+     *    index (in the wikitext, using ==wikitext headers==) will be,
+     *    ignoring all of the wikitext headers that don't actually
+     *    generate header elements (e.g. those inside nowikis, code
+     *    blocks, etc).
+     *  - sectionName: The anticipated wikitext section name. Should
+     *    appear inside the equal signs at the above index.
+     *  - sectionLevel: The anticipated wikitext section level (e.g.
+     *    2 for an h2)
+     *
+     * Parsoid is abbreviated here as "psd" in variables and comments.
+     */
+    function findSection( psdDomString, sigLinkElem ) {
+
+        //console.log(psdDomString);
+
+        var domParser = new DOMParser(),
+            psdDom = domParser.parseFromString( psdDomString, "text/html" );
+
+        var corrLink = getCorrCmt( psdDom, sigLinkElem );
+        //console.log("STEP 1 SUCCESS",corrLink);
+
+        var corrCmt = ascendToCommentContainer( corrLink );
+
+        // Ascend until we hit something in a transclusion
+        var currNode = corrLink;
+        var tsclnId = null;
+        do {
+            if( currNode.getAttribute( "about" ) &&
+                    currNode.getAttribute( "about" ).indexOf( "#mwt" ) === 0 ) {
+                tsclnId = currNode.getAttribute( "about" );
+                break;
+            }
+            currNode = currNode.parentNode;
+        } while( currNode.tagName.toLowerCase() !== "html" );
+        //console.log( "tsclnId", tsclnId );
+
+        // Now, get the nearest header above us
+        var currNode = corrCmt;
+        var nearestHeader = null;
+        var HTML_HEADER_RGX = /^h\d$/;
+        do {
+            if( HTML_HEADER_RGX.exec( currNode.tagName.toLowerCase() ) ) {
+                nearestHeader = currNode;
+                break;
+            }
+            var containedHeaders = currNode.querySelectorAll( HEADER_SELECTOR );
+            if( containedHeaders.length ) {
+                nearestHeader = containedHeaders[ containedHeaders.length - 1 ];
+                break;
+            }
+            if( currNode.previousElementSibling ) {
+                currNode = currNode.previousElementSibling;
+                continue;
+            }
+            currNode = currNode.parentNode;
+        } while( currNode.tagName.toLowerCase() !== "body" );
+
+        // Now, get the index of our nearest header
+        var headerIdx = iterableToList( psdDom.querySelectorAll( HEADER_SELECTOR ) )
+                .filter( function ( header ) {
+                    return ( header.getAttribute( "about" ) || null ) === tsclnId;
+                } )
+                .indexOf( nearestHeader );
+
+        // Finally, get the target page (page actually containing the comment)
+        var targetPage;
+        if( tsclnId === null ) {
+            targetPage = currentPageName;
+        } else {
+            var tsclnInfoSel = "*[about='" + tsclnId + "'][typeof='mw:Transclusion']",
+                infoJson = JSON.parse( psdDom.querySelector( tsclnInfoSel ) .dataset.mw );
+            for( var i = 0; i < infoJson.parts.length; i++ ) {
+                if( infoJson.parts[i].template &&
+                        infoJson.parts[i].template.target &&
+                        infoJson.parts[i].template.target.wt ) {
+                    targetPage = infoJson.parts[i].template.target.wt;
+                }
+            }
+        }
+
+        return {
+            page: targetPage,
+            sectionIdx: headerIdx,
+            sectionName: nearestHeader.textContent,
+            sectionLevel: nearestHeader.tagName.substring( 1 )
+        };
     }
 
     /**
@@ -615,12 +924,16 @@ function loadReplyLink( $, mw ) {
      * current page. rplyToXfdNom is true if we're replying to an XfD nom,
      * in which case we should use an asterisk instead of a colon.
      * cmtAuthorDom is the username of the person who wrote the comment
-     * we're replying to, parsed from the DOM.
+     * we're replying to, parsed from the DOM. revObj is the object returned
+     * by getWikitext for the page with the comment; findSectionResult is the
+     * object returned by findSection for the comment.
      *
      * Returns a Deferred that resolves/rejects when the reply succeeds/fails.
      */
-    function doReply( indentation, header, sigIdx, cmtAuthorDom, rplyToXfdNom ) {
-        var wikitext, deferred = $.Deferred();
+    function doReply( indentation, header, sigIdx, cmtAuthorDom, rplyToXfdNom, revObj, findSectionResult ) {
+        console.log("TOP OF doReply",header,findSectionResult);
+        header = [ "" + findSectionResult.sectionLevel, findSectionResult.sectionName, findSectionResult.sectionIdx ];
+        var deferred = $.Deferred();
 
         // Change UI to make it clear we're performing an operation
         document.getElementById( "reply-dialog-field" ).style["background-image"] =
@@ -628,232 +941,208 @@ function loadReplyLink( $, mw ) {
         document.querySelector( "#reply-link-buttons button" ).disabled = true;
         setStatus( "Loading..." );
 
-        // Send request to fetch current page wikitext
-        $.getJSON(
-            mw.util.wikiScript( "api" ),
-            {
-                format: "json",
-                action: "query",
-                prop: "revisions",
-                rvprop: "content",
-                rvlimit: 1,
-                titles: mw.config.get( "wgPageName" )
+        var wikitext = revObj.content;
+
+        try {
+
+            // Generate reply in wikitext form
+            var reply = document.getElementById( "reply-dialog-field" ).value.trim();
+
+            // Add a signature if one isn't already there
+            if( !hasSig( reply ) ) {
+                reply += " " + ( window.replyLinkSigPrefix ?
+                    window.replyLinkSigPrefix : "" ) + SIGNATURE;
             }
-        ).done( function ( data ) {
-            try {
 
-                // Extract wikitext from API response
-                var pageId = Object.keys(data.query.pages)[0];
-                wikitext = data.query.pages[pageId].revisions[0]["*"];
+            var replyLines = reply.split( "\n" );
 
-                // Generate reply in wikitext form
-                var reply = document.getElementById( "reply-dialog-field" ).value.trim();
+            // If we're outdenting, reset indentation and add the
+            // outdent template. This requires that there be at least
+            // one character of indentation.
+            var outdentCheckbox = document.getElementById( "reply-link-option-outdent" );
+            if( outdentCheckbox && outdentCheckbox.checked ) {
+                replyLines[0] = "{" + "{od|" + indentation.slice( 0, -1 ) +
+                    "}}" + replyLines[0];
+                indentation = "";
+            }
 
-                // Add a signature if one isn't already there
-                if( !hasSig( reply ) ) {
-                    reply += " " + ( window.replyLinkSigPrefix ?
-                        window.replyLinkSigPrefix : "" ) + SIGNATURE;
-                }
+            // Compose reply by adding indentation at the beginning of
+            // each line (if not replying to an XfD nom) or {{pb}}'s
+            // between lines (if replying to an XfD nom)
+            var fullReply;
+            if( rplyToXfdNom ) {
 
-                var replyLines = reply.split( "\n" );
-
-                // If we're outdenting, reset indentation and add the
-                // outdent template. This requires that there be at least
-                // one character of indentation.
-                var outdentCheckbox = document.getElementById( "reply-link-option-outdent" );
-                if( outdentCheckbox && outdentCheckbox.checked ) {
-                    replyLines[0] = "{" + "{od|" + indentation.slice( 0, -1 ) +
-                        "}}" + replyLines[0];
-                    indentation = "";
-                }
-
-                // Compose reply by adding indentation at the beginning of
-                // each line (if not replying to an XfD nom) or {{pb}}'s
-                // between lines (if replying to an XfD nom)
-                var fullReply;
-                if( rplyToXfdNom ) {
-
-                    // If there's a list in this reply, it's a bad idea to
-                    // use pb's, even though the markup'll probably be broken
-                    if( replyLines.some( function ( l ) { return l.substr( 0, 1 ) === "*"; } ) ) {
-                        fullReply = replyLines.map( function ( line ) {
-                            return indentation + "*" + line;
-                        } ).join( "\n" );
-                    } else {
-                        fullReply = indentation + "* " + replyLines.join( "{{pb}}" );
-                    }
-                } else {
+                // If there's a list in this reply, it's a bad idea to
+                // use pb's, even though the markup'll probably be broken
+                if( replyLines.some( function ( l ) { return l.substr( 0, 1 ) === "*"; } ) ) {
                     fullReply = replyLines.map( function ( line ) {
-                        return indentation + ":" + line;
+                        return indentation + "*" + line;
                     } ).join( "\n" );
-                }
-
-                // Prepare section metadata for getSectionWikitext call
-                console.log( "in doReply, header =", header );
-                var sectionHeader, sectionIdx;
-                if( header === null ) {
-                    sectionHeader = null, sectionIdx = -1;
                 } else {
-                    sectionHeader = header[1], sectionIdx = header[2];
+                    fullReply = indentation + "* " + replyLines.join( "{{pb}}" );
                 }
-
-                // Compatibility with User:Bility/copySectionLink
-                if( document.querySelector( "span.mw-headline a#sectiontitlecopy0" ) ) {
-
-                    // If copySectionLink is active, the paragraph symbol at
-                    // the end is a fake
-                    sectionHeader = sectionHeader.replace( /\s*¶$/, "" );
-                }
-
-                // Compatibility with the "auto-number headings" preference
-                if( document.querySelector( "span.mw-headline-number" ) ) {
-                    sectionHeader = sectionHeader.replace( /^\d+ /, "" );
-                }
-
-                var sectionWikitext = getSectionWikitext( wikitext, sectionIdx, sectionHeader );
-                var oldSectionWikitext = sectionWikitext; // We'll String.replace old w/ new
-
-                // Now, obtain the index of the end of the comment
-                var strIdx = sigIdxToStrIdx( sectionWikitext, sigIdx );
-
-                // Check for a non-negative strIdx
-                if( strIdx < 0 ) {
-                    throw( "Negative strIdx (signature not found in wikitext)" );
-                }
-
-                // Determine the user who wrote the comment, for
-                // edit-summary and sanity-check purposes
-                var userRgx = /\[\[\s*:?\s*(?:[Uu][Ss][Ee][Rr](?:(?:\s+|_)[Tt][Aa][Ll][Kk])?\s*:|Special:Contributions\/)\s*(.+?)(?:\/.+?)?(?:#.+?)?\s*(?:\|.+?)?\]\]/g;
-                var userMatches = sectionWikitext.slice( 0, strIdx )
-                        .match( userRgx );
-                var cmtAuthorWktxt = userRgx.exec(
-                        userMatches[userMatches.length - 1] )[1];
-
-                // Normalize case, because that's what happens during
-                // wikitext-to-HTML processing; also underscores to spaces
-                function sanitizeUsername( u ) {
-                    u = u.charAt( 0 ).toUpperCase() + u.substr( 1 );
-                    return u.replace( /_/g, " " );
-                }
-                cmtAuthorWktxt = sanitizeUsername( cmtAuthorWktxt );
-                cmtAuthorDom = sanitizeUsername( cmtAuthorDom );
-
-                // Sanity check: is the sig username the same as the DOM one?
-                // We attempt to check sigRedirectMapping in case the naive
-                // check fails
-                if( cmtAuthorWktxt !== cmtAuthorDom &&
-                        htmlDecode( cmtAuthorWktxt ) !== cmtAuthorDom &&
-                        sigRedirectMapping[ cmtAuthorWktxt ] !== cmtAuthorDom ) {
-                    throw( "Sanity check on sig username failed! Found " +
-                        cmtAuthorWktxt + " but expected " + cmtAuthorDom +
-                        " (wikitext vs DOM)" );
-                }
-
-                // Actually insert our reply into the section wikitext
-                sectionWikitext = insertTextAfterIdx( sectionWikitext, strIdx,
-                        indentation.length, fullReply );
-
-                // Also, if the user wanted the edit request to be answered,
-                // do that
-                var editReqCheckbox = document.getElementById(  "reply-link-option-edit-req" );
-                var markedEditReq = false;
-                if( editReqCheckbox && editReqCheckbox.checked ) {
-                    sectionWikitext = markEditReqAnswered( sectionWikitext );
-                    markedEditReq = true;
-                }
-
-                // If the user preferences indicate a dry run, print what the
-                // wikitext would have been post-edit and bail out
-                var dryRunCheckbox = document.getElementById( "reply-link-option-dry-run" );
-                if( window.replyLinkDryRun === "always" || ( dryRunCheckbox && dryRunCheckbox.checked ) ) {
-                    console.log( "~~~~~~ DRY RUN CONCLUDED ~~~~~~" );
-                    console.log( sectionWikitext );
-                    setStatus( "Check the console for the dry-run results." );
-                    document.querySelector( "#reply-link-buttons button" ).disabled = false;
-                    deferred.resolve();
-                    return deferred;
-                }
-
-                var newWikitext = wikitext.replace( oldSectionWikitext,
-                        sectionWikitext );
-
-                // Build summary
-                var defaultSummmary = "Replying to " +
-                    ( rplyToXfdNom ? xfdType + " nomination by " : "" ) +
-                    cmtAuthorWktxt +
-                    ( markedEditReq ? " and marking edit request as answered" : "" );
-                var customSummaryField = document.getElementById( "reply-link-summary" );
-                var summaryCore = defaultSummmary;
-                if( window.replyLinkCustomSummary && customSummaryField.value ) {
-                    summaryCore = customSummaryField.value.trim();
-                }
-                var summary = "/* " + sectionHeader + " */ " + summaryCore + ADVERT;
-
-                // Send another request, this time to actually edit the
-                // page
-                ( new mw.Api() ).postWithToken( "csrf", {
-                    action: "edit",
-                    title: mw.config.get( "wgPageName" ),
-                    summary: summary,
-                    text: newWikitext
-                } ).done ( function ( data ) {
-
-                    // We put this function on the window object because we
-                    // give the user a "reload" link, and it'll trigger the function
-                    window.replyLinkReload = function () {
-                        window.location.hash = sectionHeader.replace( / /g, "_" );
-                        window.location.reload( true );
-                    };
-                    if ( data && data.edit && data.edit.result && data.edit.result == "Success" ) {
-
-                        var reloadHtml = window.replyLinkAutoReload ? "automatically reloading"
-                            : "<a href='javascript:window.replyLinkReload()' class='reply-link-reload'>Reload</a>";
-                        setStatus( "Reply saved! (" + reloadHtml + ")" );
-
-                        // Required to permit reload to happen, checked in onbeforeunload
-                        replyWasSaved = true;
-
-                        if( window.replyLinkAutoReload ) {
-                            window.replyLinkReload();
-                        }
-
-                        deferred.resolve();
-                    } else {
-                        if( data && data.edit && data.edit.spamblacklist ) {
-                            setStatus( "Error! Your post contained a link on the <a href=" +
-                                "\"https://en.wikipedia.org/wiki/Wikipedia:Spam_blacklist\"" +
-                                ">spam blacklist</a>. Remove the link(s) to: " +
-                                data.edit.spamblacklist.split( "|" ).join( ", " ) + " to allow saving." );
-                            document.querySelector( "#reply-link-buttons button" ).disabled = false;
-                        } else {
-                            setStatus( "While saving, the edit query returned an error." +
-                                " Check the browser console for more information." );
-                        }
-
-                        deferred.reject();
-                    }
-                    console.log(data);
-                    document.getElementById( "reply-dialog-field" ).style["background-image"] = "";
-                } ).fail ( function( code, result ) {
-                    setStatus( "While replying, the edit failed." );
-                    console.log(code);
-                    console.log(result);
-                    deferred.reject();
-                } );
-            } catch ( e ) {
-                setStatus( "There was an error while replying! Please leave a note at " +
-                    "<a href='https://en.wikipedia.org/wiki/User_talk:Enterprisey/reply-link'>the script's talk page</a>" +
-                    " with any errors in the browser console, if possible." );
-                if( e.message ) {
-                    console.log( "Content request error: " + JSON.stringify( e.message ) );
-                }
-                deferred.reject();
-                throw e;
+            } else {
+                fullReply = replyLines.map( function ( line ) {
+                    return indentation + ":" + line;
+                } ).join( "\n" );
             }
-        } ).fail( function () {
-            setStatus( "While getting the wikitext, there was an AJAX error." );
+
+            // Prepare section metadata for getSectionWikitext call
+            //console.log( "in doReply, header =", header );
+            var sectionHeader, sectionIdx;
+            if( header === null ) {
+                sectionHeader = null, sectionIdx = -1;
+            } else {
+                sectionHeader = header[1], sectionIdx = header[2];
+            }
+
+            // Compatibility with User:Bility/copySectionLink
+            if( document.querySelector( "span.mw-headline a#sectiontitlecopy0" ) ) {
+
+                // If copySectionLink is active, the paragraph symbol at
+                // the end is a fake
+                sectionHeader = sectionHeader.replace( /\s*¶$/, "" );
+            }
+
+            // Compatibility with the "auto-number headings" preference
+            if( document.querySelector( "span.mw-headline-number" ) ) {
+                sectionHeader = sectionHeader.replace( /^\d+ /, "" );
+            }
+
+            var sectionWikitext = getSectionWikitext( wikitext, sectionIdx, sectionHeader );
+            var oldSectionWikitext = sectionWikitext; // We'll String.replace old w/ new
+
+            // Now, obtain the index of the end of the comment
+            var strIdx = sigIdxToStrIdx( sectionWikitext, sigIdx );
+
+            // Check for a non-negative strIdx
+            if( strIdx < 0 ) {
+                throw( "Negative strIdx (signature not found in wikitext)" );
+            }
+
+            // Determine the user who wrote the comment, for
+            // edit-summary and sanity-check purposes
+            var userRgx = /\[\[\s*:?\s*(?:[Uu][Ss][Ee][Rr](?:(?:\s+|_)[Tt][Aa][Ll][Kk])?\s*:|Special:Contributions\/)\s*(.+?)(?:\/.+?)?(?:#.+?)?\s*(?:\|.+?)?\]\]/g;
+            var userMatches = sectionWikitext.slice( 0, strIdx )
+                    .match( userRgx );
+            var cmtAuthorWktxt = userRgx.exec(
+                    userMatches[userMatches.length - 1] )[1];
+
+            // Normalize case, because that's what happens during
+            // wikitext-to-HTML processing; also underscores to spaces
+            function sanitizeUsername( u ) {
+                u = u.charAt( 0 ).toUpperCase() + u.substr( 1 );
+                return u.replace( /_/g, " " );
+            }
+            cmtAuthorWktxt = sanitizeUsername( cmtAuthorWktxt );
+            cmtAuthorDom = sanitizeUsername( cmtAuthorDom );
+
+            // Sanity check: is the sig username the same as the DOM one?
+            // We attempt to check sigRedirectMapping in case the naive
+            // check fails
+            if( cmtAuthorWktxt !== cmtAuthorDom &&
+                    htmlDecode( cmtAuthorWktxt ) !== cmtAuthorDom &&
+                    sigRedirectMapping[ cmtAuthorWktxt ] !== cmtAuthorDom ) {
+                throw( "Sanity check on sig username failed! Found " +
+                    cmtAuthorWktxt + " but expected " + cmtAuthorDom +
+                    " (wikitext vs DOM)" );
+            }
+
+            // Actually insert our reply into the section wikitext
+            sectionWikitext = insertTextAfterIdx( sectionWikitext, strIdx,
+                    indentation.length, fullReply );
+
+            // Also, if the user wanted the edit request to be answered,
+            // do that
+            var editReqCheckbox = document.getElementById(  "reply-link-option-edit-req" );
+            var markedEditReq = false;
+            if( editReqCheckbox && editReqCheckbox.checked ) {
+                sectionWikitext = markEditReqAnswered( sectionWikitext );
+                markedEditReq = true;
+            }
+
+            // If the user preferences indicate a dry run, print what the
+            // wikitext would have been post-edit and bail out
+            var dryRunCheckbox = document.getElementById( "reply-link-option-dry-run" );
+            if( window.replyLinkDryRun === "always" || ( dryRunCheckbox && dryRunCheckbox.checked ) ) {
+                console.log( "~~~~~~ DRY RUN CONCLUDED ~~~~~~" );
+                console.log( sectionWikitext );
+                setStatus( "Check the console for the dry-run results." );
+                document.querySelector( "#reply-link-buttons button" ).disabled = false;
+                deferred.resolve();
+                return deferred;
+            }
+
+            var newWikitext = wikitext.replace( oldSectionWikitext,
+                    sectionWikitext );
+
+            // Build summary
+            var defaultSummmary = "Replying to " +
+                ( rplyToXfdNom ? xfdType + " nomination by " : "" ) +
+                cmtAuthorWktxt +
+                ( markedEditReq ? " and marking edit request as answered" : "" );
+            var customSummaryField = document.getElementById( "reply-link-summary" );
+            var summaryCore = defaultSummmary;
+            if( window.replyLinkCustomSummary && customSummaryField.value ) {
+                summaryCore = customSummaryField.value.trim();
+            }
+            var summary = "/* " + sectionHeader + " */ " + summaryCore + ADVERT;
+
+            // Send another request, this time to actually edit the
+            // page
+            ( new mw.Api() ).postWithToken( "csrf", {
+                action: "edit",
+                title: mw.config.get( "wgPageName" ),
+                summary: summary,
+                text: newWikitext
+            } ).done ( function ( data ) {
+
+                // We put this function on the window object because we
+                // give the user a "reload" link, and it'll trigger the function
+                window.replyLinkReload = function () {
+                    window.location.hash = sectionHeader.replace( / /g, "_" );
+                    window.location.reload( true );
+                };
+                if ( data && data.edit && data.edit.result && data.edit.result == "Success" ) {
+
+                    var reloadHtml = window.replyLinkAutoReload ? "automatically reloading"
+                        : "<a href='javascript:window.replyLinkReload()' class='reply-link-reload'>Reload</a>";
+                    setStatus( "Reply saved! (" + reloadHtml + ")" );
+
+                    // Required to permit reload to happen, checked in onbeforeunload
+                    replyWasSaved = true;
+
+                    if( window.replyLinkAutoReload ) {
+                        window.replyLinkReload();
+                    }
+
+                    deferred.resolve();
+                } else {
+                    if( data && data.edit && data.edit.spamblacklist ) {
+                        setStatus( "Error! Your post contained a link on the <a href=" +
+                            "\"https://en.wikipedia.org/wiki/Wikipedia:Spam_blacklist\"" +
+                            ">spam blacklist</a>. Remove the link(s) to: " +
+                            data.edit.spamblacklist.split( "|" ).join( ", " ) + " to allow saving." );
+                        document.querySelector( "#reply-link-buttons button" ).disabled = false;
+                    } else {
+                        setStatus( "While saving, the edit query returned an error." +
+                            " Check the browser console for more information." );
+                    }
+
+                    deferred.reject();
+                }
+                console.log(data);
+                document.getElementById( "reply-dialog-field" ).style["background-image"] = "";
+            } ).fail ( function( code, result ) {
+                setStatus( "While replying, the edit failed." );
+                console.log(code);
+                console.log(result);
+                deferred.reject();
+            } );
+        } catch ( e ) {
+            setStatusError( e );
             deferred.reject();
-        } );
+        }
 
         return deferred;
     }
@@ -910,7 +1199,7 @@ function loadReplyLink( $, mw ) {
         newLink.addEventListener( "click", function ( evt ) {
 
             // Remove previous panel
-            var prevPanel = document.getElementById( "reply-dialog-panel" );
+            var prevPanel = document.getElementById( "reply-link-panel" );
             if( prevPanel ) {
                 prevPanel.remove();
             }
@@ -937,13 +1226,13 @@ function loadReplyLink( $, mw ) {
 
             // Figure out the username of the author
             // of the comment we're replying to
-            var cmtAuthor = getCommentAuthor( newLinkWrapper );
+            var cmtAuthorAndLink = getCommentAuthor( newLinkWrapper ),
+                cmtAuthor = cmtAuthorAndLink.username,
+                cmtLink = cmtAuthorAndLink.link;
 
             // Create panel
             var panelEl = document.createElement( "div" );
-            panelEl.style = "padding: 1em; margin-left: 1.6em;" +
-                " max-width: 1200px; width: 66%; margin-top: 0.5em;";
-            panelEl.id = "reply-dialog-panel";
+            panelEl.id = "reply-link-panel";
             panelEl.innerHTML = "<textarea id='reply-dialog-field' class='mw-ui-input'" +
                 " placeholder='Reply here!'></textarea>" +
                 ( window.replyLinkCustomSummary ? "<label for='reply-link-summary'>Summary: </label>" +
@@ -1034,10 +1323,22 @@ function loadReplyLink( $, mw ) {
 
             // Called by the "Reply" button and Ctrl-Enter in the text area
             function startReply() {
-                // ourMetadata contains data in the format:
-                // [indentation, header, sigIdx]
-                doReply( ourMetadata[0], ourMetadata[1], ourMetadata[2],
-                    cmtAuthor, rplyToXfdNom );
+                var parsoidUrl = PARSOID_ENDPOINT + encodeURIComponent( currentPageName ),
+                    findSectionResultPromise = $.get( parsoidUrl )
+                        .then( function ( parsoidDomString ) {
+                            return findSection( parsoidDomString, cmtLink );
+                    } );
+
+                var revObjPromise = findSectionResultPromise.then( function ( findSectionResult ) {
+                    return getWikitext( findSectionResult.page );
+                } );
+
+                $.when( findSectionResultPromise, revObjPromise ).then( function ( findSectionResult, revObj ) {
+                    // ourMetadata contains data in the format:
+                    // [indentation, header, sigIdx]
+                    doReply( ourMetadata[0], ourMetadata[1], ourMetadata[2],
+                        cmtAuthor, rplyToXfdNom, revObj, findSectionResult );
+                }, setStatusError );
             }
 
             // Event listener for the "Reply" button
@@ -1195,12 +1496,12 @@ function loadReplyLink( $, mw ) {
         // This loop adds two entries in the metadata dictionary:
         // the header data, and the sigIdx values
         var sigIdxEls = iterableToList( mainContent.querySelectorAll(
-                "h2,h3,h4,h5,h6,span.reply-link-wrapper a" ) );
+                HEADER_SELECTOR + ",span.reply-link-wrapper a" ) );
         var currSigIdx = 0, j, numSigIdxEls, currHeaderEl, currHeaderData;
         var headerIdx = 0; // index of the current header
         var headerLvl = 0; // level of the current header
         for( j = 0, numSigIdxEls = sigIdxEls.length; j < numSigIdxEls; j++ ) {
-            var headerTagNameMatch = /h(\d+)/.exec( 
+            var headerTagNameMatch = /^h(\d+)$/.exec(
                 sigIdxEls[j].tagName.toLowerCase() );
             if( headerTagNameMatch ) {
                 currHeaderEl = sigIdxEls[j];
@@ -1268,38 +1569,55 @@ function loadReplyLink( $, mw ) {
                 .append( $( "<div>" ).attr( "id", "reply-link-buttons" )
                     .append( $( "<button> " ) ) ) );
 
-        // Statistics variables
-        var successes = 0, failures = 0;
+        // Fetch content, Parsoid DOM, etc
+        var parsoidUrl = PARSOID_ENDPOINT + encodeURIComponent( currentPageName );
+        $.get( parsoidUrl ).then( function ( parsoidDomString ) {
 
-        // Run one test on a wrapper link
-        function runOneTestOn( wrapper ) {
-            var ourMetadata = metadata[ wrapper.children[0].id ];
-            try {
-                doReply( ourMetadata[0], ourMetadata[1], ourMetadata[2],
-                        getCommentAuthor( wrapper ), false ).done( function () {
-                            wrapper.style.background = "green";
-                            successes++;
-                        } ).fail( function () {
-                            wrapper.style.background = "red";
-                            failures++;
-                        } );
-            } catch ( e ) {
-                console.error( e );
-            }
-        }
+            // Statistics variables
+            var successes = 0, failures = 0;
 
-        var wrappers = Array.from( document.querySelectorAll( ".reply-link-wrapper" ) );
-        function runOneTest() {
-            var wrapper = wrappers.shift();
-            if( wrapper ) {
-                runOneTestOn( wrapper );
-                setTimeout( runOneTest, 250 );
-            } else {
-                var results = successes + " successes, " + failures + " failures";
-                $( "#mw-content-text" ).prepend( results ).append( results );
+            // Run one test on a wrapper link
+            function runOneTestOn( wrapper ) {
+                try {
+                    var cmtAuthorAndLink = getCommentAuthor( wrapper ),
+                        cmtAuthor = cmtAuthorAndLink.username,
+                        cmtLink = cmtAuthorAndLink.link;
+                    var ourMetadata = metadata[ wrapper.children[0].id ];
+                    var findSectionResult = findSection( parsoidDomString, cmtLink );
+
+                    getWikitext( findSectionResult.page ).then( function ( revObj ) {
+                            doReply( ourMetadata[0], ourMetadata[1], ourMetadata[2],
+                                    cmtAuthor, false, revObj, findSectionResult ).done( function () {
+                                        wrapper.style.background = "green";
+                                        successes++;
+                                    } ).fail( function () {
+                                        wrapper.style.background = "red";
+                                        failures++;
+                                    } );
+                    }, function ( e ) {
+                        wrapper.style.background = "red";
+                        failures++;
+                    } );
+                } catch ( e ) {
+                    console.error( e );
+                    wrapper.style.background = "red";
+                    failures++;
+                }
             }
-        }
-        setTimeout( runOneTest, 0 );
+
+            var wrappers = Array.from( document.querySelectorAll( ".reply-link-wrapper" ) );
+            function runOneTest() {
+                var wrapper = wrappers.shift();
+                if( wrapper ) {
+                    runOneTestOn( wrapper );
+                    setTimeout( runOneTest, 250 );
+                } else {
+                    var results = successes + " successes, " + failures + " failures";
+                    $( "#mw-content-text" ).prepend( results ).append( results );
+                }
+            }
+            setTimeout( runOneTest, 0 );
+        } );
     }
 
     function onReady() {
@@ -1307,6 +1625,12 @@ function loadReplyLink( $, mw ) {
         // Exit if history page or edit page
         if( mw.config.get( "wgAction" ) === "history" ) return;
         if( document.getElementById( "editform" ) ) return;
+
+        // CSS
+        mw.util.addCSS(
+            "#reply-link-panel { padding: 1em; margin-left: 1.6em; "+
+              "max-width: 1200px; width: 66%; margin-top: 0.5em; }"
+        );
 
         // Initialize the xfdType global variable, which must happen
         // before the call to attachLinks
