@@ -5,8 +5,8 @@ function loadReplyLink( $, mw ) {
     var EDIT_REQ_REGEX = /^((Semi|Template|Extended-confirmed)-p|P)rotected edit request on \d\d? \w+ \d{4}/;
     var EDIT_REQ_TPL_REGEX = /\{\{edit (template|fully|extended|semi)-protected\s*(\|.+?)*\}\}/;
     var SIGNATURE = "~~" + "~~"; // split up because it might get processed
-    var ADVERT = " ([[User:Enterprisey/reply-link|reply-link]])";
-    var PARSOID_ENDPOINT = "https://en.wikipedia.org/api/rest_v1/page/html/";
+    var ADVERT = " ([[w:en:User:Enterprisey/reply-link|reply-link]])";
+    var PARSOID_ENDPOINT = "https:" + mw.config.get( "wgServer" ) + "/api/rest_v1/page/html/";
     var HEADER_SELECTOR = "h1,h2,h3,h4,h5,h6";
 
     // T:TDYK, used at the end of loadReplyLink
@@ -14,6 +14,22 @@ function loadReplyLink( $, mw ) {
 
     // Threshold for indentation when we offer to outdent
     var OUTDENT_THRESH = 8;
+
+    // All of the interface message keys that we explicitly load
+    var INT_MSG_KEYS = [ "mycontris" ];
+
+    // Date format regexes in signatures (i.e. the "default date format")
+    var DATE_FMT_RGX = {
+        "//en.wikipedia.org": /\d\d:\d\d,\s\d{1,2}\s\w+?\s\d{4}/.source,
+        "//pt.wikipedia.org": /\d\dh\d\dmin\sde \d{1,2} de \w+? de \d{4}/.source
+    }
+
+    /*
+     * Regex *source* for a signature link prefix. Basically the
+     * localized equivalent of User( talk)?|Special:Contributions/
+     * Initialized near the top of the closure in handleWrapperClick.
+     */
+    var sigLinkPfxRgx = null;
 
     /**
      * This dictionary is some global state that holds three pieces of
@@ -72,6 +88,35 @@ function loadReplyLink( $, mw ) {
      * disable the onbeforeunload handler.
      */
     var replyWasSaved = false;
+
+    /**
+     * Get the formatted namespace name for a namespace ID.
+     * Quick ref: user = 2, proj = 4
+     */
+    function fmtNs( nsId ) {
+        return mw.config.get( "wgFormattedNamespaces" )[ nsId ];
+    }
+
+    /**
+     * Escapes a string for inclusion in a regex.
+     */
+    function escapeForRegex( s ) {
+        return s.replace( /[-\/\\^$*+?.()|[\]{}]/g, '\\$&' );
+    }
+
+    /**
+     * Capitalize the first letter of a string.
+     */
+    function capFirstLetter( someString ) {
+        return someString.charAt( 0 ).toUpperCase() + someString.slice( 1 );
+    }
+
+    /**
+     * Canonical-ize a namespace.
+     */
+    function canonicalizeNs( ns ) {
+        return fmtNs( mw.config.get( "wgNamespaceIds" )[ ns.toLowerCase().replace( / /g, "_" ) ] );
+    }
 
     /**
      * This function converts any (index-able) iterable into a list.
@@ -278,16 +323,18 @@ function loadReplyLink( $, mw ) {
                 link = links[j];
 
                 if( link.className.indexOf( "mw-selflink" ) >= 0 ) {
-                    return { username: currentPageName.replace( "User_talk:", "" )
+                    return { username: currentPageName.replace( /.+:/, "" )
                         .replace( /_/g, " " ), link: link };
                 }
+                console.log(link,decodeURIComponent(link.getAttribute("href")));
 
                 // Also matches redlinks. Why people have redlinks in their sigs on
                 // purpose, I may never know.
-                var usernameMatch =
-                    /^\/(?:wiki\/(?:User(?:_talk)?:|Special:Contributions\/)(.+?)(?:\/.+?)?(?:#.+)?|w\/index\.php\?title=User(?:_talk)?:(.+?)&action=edit&redlink=1)?$/
-                    .exec( link.getAttribute( "href" ) );
+                console.log( "^\\/(?:wiki\\/" + sigLinkPfxRgx + /(.+?)(?:\/.+?)?(?:#.+)?|w\/index\.php\?title=User(?:_talk)?:(.+?)&action=edit&redlink=1/.source + ")$" )
+                var sigLinkRe = new RegExp( "^\\/(?:wiki\\/" + sigLinkPfxRgx + /(.+?)(?:\/.+?)?(?:#.+)?|w\/index\.php\?title=User(?:_talk)?:(.+?)&action=edit&redlink=1/.source + ")$" );
+                var usernameMatch = sigLinkRe.exec( decodeURIComponent( link.getAttribute( "href" ) ) );
                 if( usernameMatch ) {
+                console.log("usernameMatch",usernameMatch)
                     var rawUsername = usernameMatch[1] ? usernameMatch[1] : usernameMatch[2];
                     return {
                         username: decodeURIComponent( rawUsername ).replace( /_/g, " " ),
@@ -441,14 +488,18 @@ function loadReplyLink( $, mw ) {
         }
 
         // Convert live href to psd href
-        var newHref, liveHref = sigLinkElem.getAttribute( "href" );
+        var newHref, liveHref = decodeURIComponent( sigLinkElem.getAttribute( "href" ) );
         if( sigLinkElem.className.indexOf( "mw-selflink" ) >= 0 ) {
             newHref = "./" + currentPageName; 
         } else {
             if( /^\/wiki/.test( liveHref ) ) {
-                newHref = liveHref.replace( /^\/wiki/, "." );
+                newHref = liveHref.replace( /^\/wiki/, "." )
+                        .replace( /\/(.+?):/, function ( _, p1 ) {
+                            return "/" + canonicalizeNs( p1 ).replace( / /g, "_" ) + ":";
+                        } );
             } else {
-                var REDLINK_HREF_RGX = /^\/w\/index\.php\?title=(User(?:_talk)?:.+?)&action=edit&redlink=1$/;
+                var REDLINK_HREF_RGX = new RegExp( /^\/w\/index\.php\?title=/.source +
+                        "((?:" + fmtNs( 2 ) + "|" + fmtNs( 3 ) + "):.+?)" + /&action=edit&redlink=1$/.source );
                 newHref = "./" + REDLINK_HREF_RGX.exec( liveHref )[1];
             }
         }
@@ -492,7 +543,7 @@ function loadReplyLink( $, mw ) {
         // TODO: Optimization opportunity - run querySelectorAll only on the
         // section that we know contains the comment
         var psdLinks = psdDom.querySelectorAll( selector );
-        console.log(psdLinks);
+        console.log(selector, " --> ", psdLinks);
 
         // Narrow down by entire textContent of list element
         var psdCorrLinks = []; // the corresponding link elem(s)
@@ -551,7 +602,7 @@ function loadReplyLink( $, mw ) {
      */
     function findSection( psdDomString, sigLinkElem ) {
 
-        //console.log(psdDomString);
+        console.log(psdDomString);
 
         var domParser = new DOMParser(),
             psdDom = domParser.parseFromString( psdDomString, "text/html" );
@@ -618,6 +669,12 @@ function loadReplyLink( $, mw ) {
             }
         }
 
+console.log({
+            page: targetPage,
+            sectionIdx: headerIdx,
+            sectionName: nearestHeader.textContent,
+            sectionLevel: nearestHeader.tagName.substring( 1 )
+        })
         return {
             page: targetPage,
             sectionIdx: headerIdx,
@@ -705,7 +762,7 @@ function loadReplyLink( $, mw ) {
                     sectionName = sectionName.replace( /\xA0([?:;!%»›])/g, " $1" );
 
                     if( sanitizedWktxtSectionName !== sectionName ) {
-                        throw( "Sanity check on header name failed! Found \"" +
+                        throw new Error( "Sanity check on header name failed! Found \"" +
                                 sanitizedWktxtSectionName + "\", expected \"" +
                                 sectionName + "\" (wikitext vs DOM)" );
                     }
@@ -792,8 +849,12 @@ function loadReplyLink( $, mw ) {
          *    and a timestamp
          *  - some comments/whitespace or some non-whitespace
          *  - finally, the end of the line
+         *
+         * It's also localized.
          */
-        var SIG_REGEX = /(?:\[\[\s*:?\s*(([Uu]ser(\s+talk)?|Special:Contributions\/)([^\]]||\](?!\]))*?)\]\]\)?([^\[]|\[(?!\[)|\[\[(?!User(\s+talk)?:))*?\d\d:\d\d,\s\d{1,2}\s\w+?\s\d\d\d\d\s\(UTC\)|class\s*=\s*"autosigned".+?\(UTC\)<\/small>)(([ \t\f]|<!--.*?-->)*(?!\S)|\S+([ \t\f]|<!--.*?-->)*)?$/gm;
+        var sigRgxSrc = "(?:" + /\[\[\s*:?\s*/.source + "(" + sigLinkPfxRgx.replace( /_/g, " " ) + /([^\]]||\](?!\]))*?/.source + ")" + /\]\]\)?([^\[]|\[(?!\[)|\[\[(?!User(\s+talk)?:))*?/.source + DATE_FMT_RGX[mw.config.get( "wgServer" )] + /\s+\(UTC\)|class\s*=\s*"autosigned".+?\(UTC\)<\/small>/.source + ")" + /(([ \t\f]|<!--.*?-->)*(?!\S)|\S+([ \t\f]|<!--.*?-->)*)$/.source;
+        console.log(sigRgxSrc);
+        var sigRgx = new RegExp( sigRgxSrc, "igm" );
         var matchIdx = 0;
         var match;
         var matchIdxEnd;
@@ -804,7 +865,7 @@ function loadReplyLink( $, mw ) {
 
         sigMatchLoop:
         for( ; this_is_true ; matchIdx++ ) {
-            match = SIG_REGEX.exec( sectionWikitext );
+            match = sigRgx.exec( sectionWikitext );
             if( !match ) {
                 console.log("[sigIdxToStrIdx] out of matches");
                 return -1;
@@ -1049,7 +1110,7 @@ function loadReplyLink( $, mw ) {
 
             // Determine the user who wrote the comment, for
             // edit-summary and sanity-check purposes
-            var userRgx = /\[\[\s*:?\s*(?:[Uu][Ss][Ee][Rr](?:(?:\s+|_)[Tt][Aa][Ll][Kk])?\s*:|Special:Contributions\/)\s*(.+?)(?:\/.+?)?(?:#.+?)?\s*(?:\|.+?)?\]\]/g;
+            var userRgx = new RegExp( /\[\[\s*:?\s*/.source + sigLinkPfxRgx.replace( /_/g, " " ) + /\s*(.+?)(?:\/.+?)?(?:#.+?)?\s*(?:\|.+?)?\]\]/.source, "g" );
             var userMatches = sectionWikitext.slice( 0, strIdx )
                     .match( userRgx );
             var cmtAuthorWktxt = userRgx.exec(
@@ -1070,7 +1131,7 @@ function loadReplyLink( $, mw ) {
             if( cmtAuthorWktxt !== cmtAuthorDom &&
                     htmlDecode( cmtAuthorWktxt ) !== cmtAuthorDom &&
                     sigRedirectMapping[ cmtAuthorWktxt ] !== cmtAuthorDom ) {
-                throw( "Sanity check on sig username failed! Found " +
+                throw new Error( "Sanity check on sig username failed! Found " +
                     cmtAuthorWktxt + " but expected " + cmtAuthorDom +
                     " (wikitext vs DOM)" );
             }
@@ -1174,6 +1235,234 @@ function loadReplyLink( $, mw ) {
         return deferred;
     }
 
+
+    function handleWrapperClick ( linkLabel, parent, rplyToXfdNom ) {
+        return function ( evt ) {
+            $.when( mw.messages.exists( INT_MSG_KEYS[0] ) ? 1 :
+                    ( new mw.Api() ).loadMessages( INT_MSG_KEYS ) ).then( function () {
+                var newLink = this;
+                var newLinkWrapper = this.parentNode;
+
+                if( !sigLinkPfxRgx ) {
+                    var nsIdMap = mw.config.get( "wgNamespaceIds" );
+                    var nsRgxFragments = [];
+                    var contribsSecondFrag = ":" + escapeForRegex( mw.messages.get( "mycontris" ) ) + "\\/";
+                    for( var nsName in nsIdMap ) {
+                        if( !nsIdMap.hasOwnProperty( nsName ) ) continue;
+                        switch( nsIdMap[nsName] ) {
+                            case 2:
+                            case 3:
+                                nsRgxFragments.push( escapeForRegex( capFirstLetter( nsName ) ) + "\\s*:" );
+                                break;
+                            case -1:
+                                nsRgxFragments.push( escapeForRegex( capFirstLetter( nsName ) ) + contribsSecondFrag );
+                                break;
+                        }
+                    }
+                    sigLinkPfxRgx = "(?:" + nsRgxFragments.join( "|" ) + ")";
+                }
+
+                // Remove previous panel
+                var prevPanel = document.getElementById( "reply-link-panel" );
+                if( prevPanel ) {
+                    prevPanel.remove();
+                }
+
+                // Reset previous cancel links
+                var cancelLinks = iterableToList( document.querySelectorAll(
+                            ".reply-link-wrapper a" ) );
+                cancelLinks.forEach( function ( el ) {
+                    if( el != newLink ) el.textContent = el.dataset.originalLabel;
+                } );
+
+                // Handle disable action
+                if( newLink.textContent === linkLabel ) {
+
+                    // Disable this link
+                    newLink.textContent = "cancel " + linkLabel;
+                } else {
+
+                    // We've already cancelled the reply
+                    newLink.textContent = linkLabel;
+                    evt.preventDefault();
+                    return false;
+                }
+
+                // Figure out the username of the author
+                // of the comment we're replying to
+                var cmtAuthorAndLink = getCommentAuthor( newLinkWrapper );
+
+                try {
+                    var cmtAuthor = cmtAuthorAndLink.username,
+                        cmtLink = cmtAuthorAndLink.link;
+                } catch ( e ) {
+                    setStatusError( e );
+                }
+
+                // Create panel
+                var panelEl = document.createElement( "div" );
+                panelEl.id = "reply-link-panel";
+                panelEl.innerHTML = "<textarea id='reply-dialog-field' class='mw-ui-input'" +
+                    " placeholder='Reply here!'></textarea>" +
+                    ( window.replyLinkCustomSummary ? "<label for='reply-link-summary'>Summary: </label>" +
+                        "<input id='reply-link-summary' class='mw-ui-input' placeholder='Edit summary' " +
+                        "value='Replying to " + cmtAuthor + "'/><br />" : "" ) +
+                    "<table style='border-collapse:collapse'><tr><td id='reply-link-buttons' style='width: " +
+                    ( window.replyLinkPreloadPing === "button" ? "325" : "255" ) + "px'>" +
+                    "<button id='reply-dialog-button' class='mw-ui-button mw-ui-progressive'>Reply</button> " +
+                    "<button id='reply-link-preview-button' class='mw-ui-button'>Preview</button>" +
+                    ( window.replyLinkPreloadPing === "button" ?
+                        " <button id='reply-link-ping-button' class='mw-ui-button'>Ping</button>" : "" ) +
+                    "<button id='reply-link-cancel-button' class='mw-ui-button mw-ui-quiet mw-ui-destructive'>Cancel</button></td>" +
+                    "<td id='reply-dialog-status'></span><div style='clear:left'></td></tr></table>" +
+                    "<div id='reply-link-options' class='gone-on-empty' style='margin-top: 0.5em'></div>" +
+                    "<div id='reply-link-preview' class='gone-on-empty' style='border: thin dashed gray; padding: 0.5em; margin-top: 0.5em'></div>";
+                mw.util.addCSS( ".gone-on-empty:empty { display: none; }" );
+                parent.insertBefore( panelEl, newLinkWrapper.nextSibling );
+                var replyDialogField = document.getElementById( "reply-dialog-field" );
+                replyDialogField.style = "padding: 0.625em; min-height: 10em; margin-bottom: 0.75em;";
+                if( window.replyLinkPreloadPing === "always" &&
+                        cmtAuthor &&
+                        cmtAuthor !== mw.config.get( "wgUserName" ) &&
+                        !/(\d+.){3}\d+/.test( cmtAuthor ) ) {
+                    replyDialogField.value = window.replyLinkPreloadPingTpl.replace( "##", cmtAuthor );
+                }
+
+                // Fill up #reply-link-options
+                function newOption( id, text, defaultOn ) {
+                    var newCheckbox = document.createElement( "input" );
+                    newCheckbox.type = "checkbox";
+                    newCheckbox.id = id;
+                    if( defaultOn ) {
+                        newCheckbox.checked = true;
+                    }
+                    var newLabel = document.createElement( "label" );
+                    newLabel.htmlFor = id;
+                    newLabel.appendChild( document.createTextNode( text ) );
+                    document.getElementById( "reply-link-options" ).appendChild( newCheckbox );
+                    document.getElementById( "reply-link-options" ).appendChild( newLabel );
+                }
+
+                // Fetch metadata about this specific comment
+                var ourMetadata = metadata[this.id];
+
+                // If the dry-run option is "checkbox", add an option to make it
+                // a dry run
+                if( window.replyLinkDryRun === "checkbox" ) {
+                    newOption( "reply-link-option-dry-run", "Don't actually edit?", true );
+                }
+
+                // If the current section header text indicates an edit request,
+                // offer to mark it as answered
+                if( EDIT_REQ_REGEX.test( ourMetadata[1][1] ) ) {
+                    newOption( "reply-link-option-edit-req", "Mark edit request as answered?", false );
+                }
+
+                // If the previous comment was indented by OUTDENT_THRESH,
+                // offer to outdent
+                if( ourMetadata[0].length >= OUTDENT_THRESH ) {
+                    newOption( "reply-link-option-outdent", "Outdent?", false );
+                }
+
+                /* Commented out because I could never get it to work
+                // Autofill with a recommendation if we're replying to a nom
+                if( rplyToXfdNom ) {
+                    replyDialogField.value = "'''Comment'''";
+
+                    // Highlight the "Comment" part so the user can change it
+                    var range = document.createRange();
+                    range.selectNodeContents( replyDialogField );
+                    //range.setStart( replyDialogField, 3 ); // start of "Comment"
+                    //range.setEnd( replyDialogField, 10 ); // end of "Comment"
+                    var sel = window.getSelection();
+                    sel.removeAllRanges();
+                    sel.addRange( range );
+                }*/
+
+                // Close handler
+                window.onbeforeunload = function ( e ) {
+                    if( !replyWasSaved &&
+                            document.getElementById( "reply-dialog-field" ) &&
+                            document.getElementById( "reply-dialog-field" ).value ) {
+                        var txt = "You've started a reply but haven't posted it";
+                        e.returnValue = txt;
+                        return txt;
+                    }
+                };
+
+                // Called by the "Reply" button and Ctrl-Enter in the text area
+                function startReply() {
+                    var parsoidUrl = PARSOID_ENDPOINT + encodeURIComponent( currentPageName ),
+                        findSectionResultPromise = $.get( parsoidUrl )
+                            .then( function ( parsoidDomString ) {
+                                return findSection( parsoidDomString, cmtLink );
+                        },console.error );
+
+                    var revObjPromise = findSectionResultPromise.then( function ( findSectionResult ) {
+                        return getWikitext( findSectionResult.page );
+                    },console.error );
+
+                    $.when( findSectionResultPromise, revObjPromise ).then( function ( findSectionResult, revObj ) {
+                        // ourMetadata contains data in the format:
+                        // [indentation, header, sigIdx]
+                        doReply( ourMetadata[0], ourMetadata[1], ourMetadata[2],
+                            cmtAuthor, rplyToXfdNom, revObj, findSectionResult );
+                    }, function (e) { setStatusError(new Error(e))} );
+                }
+
+                // Event listener for the "Reply" button
+                document.getElementById( "reply-dialog-button" )
+                    .addEventListener( "click", startReply );
+
+                // Event listener for the text area
+                document.getElementById( "reply-dialog-field" )
+                    .addEventListener( "keydown", function ( e ) {
+                        if( e.ctrlKey && ( e.keyCode == 10 || e.keyCode == 13 ) ) {
+                            startReply();
+                        }
+                    } );
+
+                // Event listener for the "Preview" button
+                document.getElementById( "reply-link-preview-button" )
+                    .addEventListener( "click", function () {
+                        var sanitizedCode = document.getElementById( "reply-dialog-field" ).value
+                                .replace( /&/g, "%26" );
+                        $.post( "https:" + mw.config.get( "wgServer" ) +
+                            "/api/rest_v1/transform/wikitext/to/html/" + encodeURIComponent( currentPageName ),
+                            "wikitext=" + sanitizedCode + "&body_only=true",
+                            function ( html ) {
+                                document.getElementById( "reply-link-preview" ).innerHTML = html;
+
+                                // The hrefs in the wikilinks are all given locally for some reason
+                                var links = document.querySelectorAll( "#reply-link-preview a[rel='mw:WikiLink']" );
+                                for( var i = 0, n = links.length; i < n; i++ ) {
+                                    links[i].href = mw.util.getUrl( links[i].getAttribute("href").replace( /^\.\//, "" ) );
+                                }
+                            } );
+                    } );
+
+                if( window.replyLinkPreloadPing === "button" ) {
+                    document.getElementById( "reply-link-ping-button" )
+                        .addEventListener( "click", function () {
+                            replyDialogField.value = window.replyLinkPreloadPingTpl
+                                .replace( "##", cmtAuthor ) + replyDialogField.value;
+                        } );
+                }
+
+                // Event listener for the "Cancel" button
+                document.getElementById( "reply-link-cancel-button" )
+                    .addEventListener( "click", function () {
+                        newLink.textContent = linkLabel;
+                        panelEl.remove();
+                    } );
+            }.bind( this ) );
+
+            // Cancel default event handler
+            evt.preventDefault();
+            return false;
+        }
+    }
+
     /**
      * Adds a "(reply)" link after the provided text node, giving it
      * the provided element id. anyIndentation is true if there's any
@@ -1223,209 +1512,7 @@ function loadReplyLink( $, mw ) {
         newLink.id = preferredId;
         newLink.dataset.originalLabel = linkLabel;
         newLink.appendChild( document.createTextNode( linkLabel ) );
-        newLink.addEventListener( "click", function ( evt ) {
-
-            // Remove previous panel
-            var prevPanel = document.getElementById( "reply-link-panel" );
-            if( prevPanel ) {
-                prevPanel.remove();
-            }
-
-            // Reset previous cancel links
-            var cancelLinks = iterableToList( document.querySelectorAll(
-                        ".reply-link-wrapper a" ) );
-            cancelLinks.forEach( function ( el ) {
-                if( el != newLink ) el.textContent = el.dataset.originalLabel;
-            } );
-
-            // Handle disable action
-            if( newLink.textContent === linkLabel ) {
-
-                // Disable this link
-                newLink.textContent = "cancel " + linkLabel;
-            } else {
-
-                // We've already cancelled the reply
-                newLink.textContent = linkLabel;
-                evt.preventDefault();
-                return false;
-            }
-
-            // Figure out the username of the author
-            // of the comment we're replying to
-            var cmtAuthorAndLink = getCommentAuthor( newLinkWrapper );
-
-            try {
-                var cmtAuthor = cmtAuthorAndLink.username,
-                    cmtLink = cmtAuthorAndLink.link;
-            } catch ( e ) {
-                console.error( e );
-
-                // Cancel default event handler
-                evt.preventDefault();
-                return false;
-            }
-
-            // Create panel
-            var panelEl = document.createElement( "div" );
-            panelEl.id = "reply-link-panel";
-            panelEl.innerHTML = "<textarea id='reply-dialog-field' class='mw-ui-input'" +
-                " placeholder='Reply here!'></textarea>" +
-                ( window.replyLinkCustomSummary ? "<label for='reply-link-summary'>Summary: </label>" +
-                    "<input id='reply-link-summary' class='mw-ui-input' placeholder='Edit summary' " +
-                    "value='Replying to " + cmtAuthor + "'/><br />" : "" ) +
-                "<table style='border-collapse:collapse'><tr><td id='reply-link-buttons' style='width: " +
-                ( window.replyLinkPreloadPing === "button" ? "325" : "255" ) + "px'>" +
-                "<button id='reply-dialog-button' class='mw-ui-button mw-ui-progressive'>Reply</button> " +
-                "<button id='reply-link-preview-button' class='mw-ui-button'>Preview</button>" +
-                ( window.replyLinkPreloadPing === "button" ?
-                    " <button id='reply-link-ping-button' class='mw-ui-button'>Ping</button>" : "" ) +
-                "<button id='reply-link-cancel-button' class='mw-ui-button mw-ui-quiet mw-ui-destructive'>Cancel</button></td>" +
-                "<td id='reply-dialog-status'></span><div style='clear:left'></td></tr></table>" +
-                "<div id='reply-link-options' class='gone-on-empty' style='margin-top: 0.5em'></div>" +
-                "<div id='reply-link-preview' class='gone-on-empty' style='border: thin dashed gray; padding: 0.5em; margin-top: 0.5em'></div>";
-            mw.util.addCSS( ".gone-on-empty:empty { display: none; }" );
-            parent.insertBefore( panelEl, newLinkWrapper.nextSibling );
-            var replyDialogField = document.getElementById( "reply-dialog-field" );
-            replyDialogField.style = "padding: 0.625em; min-height: 10em; margin-bottom: 0.75em;";
-            if( window.replyLinkPreloadPing === "always" &&
-                    cmtAuthor &&
-                    cmtAuthor !== mw.config.get( "wgUserName" ) &&
-                    !/(\d+.){3}\d+/.test( cmtAuthor ) ) {
-                replyDialogField.value = window.replyLinkPreloadPingTpl.replace( "##", cmtAuthor );
-            }
-
-            // Fill up #reply-link-options
-            function newOption( id, text, defaultOn ) {
-                var newCheckbox = document.createElement( "input" );
-                newCheckbox.type = "checkbox";
-                newCheckbox.id = id;
-                if( defaultOn ) {
-                    newCheckbox.checked = true;
-                }
-                var newLabel = document.createElement( "label" );
-                newLabel.htmlFor = id;
-                newLabel.appendChild( document.createTextNode( text ) );
-                document.getElementById( "reply-link-options" ).appendChild( newCheckbox );
-                document.getElementById( "reply-link-options" ).appendChild( newLabel );
-            }
-
-            // Fetch metadata about this specific comment
-            var ourMetadata = metadata[this.id];
-
-            // If the dry-run option is "checkbox", add an option to make it
-            // a dry run
-            if( window.replyLinkDryRun === "checkbox" ) {
-                newOption( "reply-link-option-dry-run", "Don't actually edit?", true );
-            }
-
-            // If the current section header text indicates an edit request,
-            // offer to mark it as answered
-            if( EDIT_REQ_REGEX.test( ourMetadata[1][1] ) ) {
-                newOption( "reply-link-option-edit-req", "Mark edit request as answered?", false );
-            }
-
-            // If the previous comment was indented by OUTDENT_THRESH,
-            // offer to outdent
-            if( ourMetadata[0].length >= OUTDENT_THRESH ) {
-                newOption( "reply-link-option-outdent", "Outdent?", false );
-            }
-
-            /* Commented out because I could never get it to work
-            // Autofill with a recommendation if we're replying to a nom
-            if( rplyToXfdNom ) {
-                replyDialogField.value = "'''Comment'''";
-
-                // Highlight the "Comment" part so the user can change it
-                var range = document.createRange();
-                range.selectNodeContents( replyDialogField );
-                //range.setStart( replyDialogField, 3 ); // start of "Comment"
-                //range.setEnd( replyDialogField, 10 ); // end of "Comment"
-                var sel = window.getSelection();
-                sel.removeAllRanges();
-                sel.addRange( range );
-            }*/
-
-            // Close handler
-            window.onbeforeunload = function ( e ) {
-                if( !replyWasSaved &&
-                        document.getElementById( "reply-dialog-field" ) &&
-                        document.getElementById( "reply-dialog-field" ).value ) {
-                    var txt = "You've started a reply but haven't posted it";
-                    e.returnValue = txt;
-                    return txt;
-                }
-            };
-
-            // Called by the "Reply" button and Ctrl-Enter in the text area
-            function startReply() {
-                var parsoidUrl = PARSOID_ENDPOINT + encodeURIComponent( currentPageName ),
-                    findSectionResultPromise = $.get( parsoidUrl )
-                        .then( function ( parsoidDomString ) {
-                            return findSection( parsoidDomString, cmtLink );
-                    } );
-
-                var revObjPromise = findSectionResultPromise.then( function ( findSectionResult ) {
-                    return getWikitext( findSectionResult.page );
-                } );
-
-                $.when( findSectionResultPromise, revObjPromise ).then( function ( findSectionResult, revObj ) {
-                    // ourMetadata contains data in the format:
-                    // [indentation, header, sigIdx]
-                    doReply( ourMetadata[0], ourMetadata[1], ourMetadata[2],
-                        cmtAuthor, rplyToXfdNom, revObj, findSectionResult );
-                }, setStatusError );
-            }
-
-            // Event listener for the "Reply" button
-            document.getElementById( "reply-dialog-button" )
-                .addEventListener( "click", startReply );
-
-            // Event listener for the text area
-            document.getElementById( "reply-dialog-field" )
-                .addEventListener( "keydown", function ( e ) {
-                    if( e.ctrlKey && ( e.keyCode == 10 || e.keyCode == 13 ) ) {
-                        startReply();
-                    }
-                } );
-
-            // Event listener for the "Preview" button
-            document.getElementById( "reply-link-preview-button" )
-                .addEventListener( "click", function () {
-                    var sanitizedCode = document.getElementById( "reply-dialog-field" ).value
-                            .replace( /&/g, "%26" );
-                    $.post( "https://en.wikipedia.org/api/rest_v1/transform/wikitext/to/html/" + encodeURIComponent( currentPageName ),
-                        "wikitext=" + sanitizedCode + "&body_only=true",
-                        function ( html ) {
-                            document.getElementById( "reply-link-preview" ).innerHTML = html;
-
-                            // The hrefs in the wikilinks are all given locally for some reason
-                            var links = document.querySelectorAll( "#reply-link-preview a[rel='mw:WikiLink']" );
-                            for( var i = 0, n = links.length; i < n; i++ ) {
-                                links[i].href = mw.util.getUrl( links[i].getAttribute("href").replace( /^\.\//, "" ) );
-                            }
-                        } );
-                } );
-
-            if( window.replyLinkPreloadPing === "button" ) {
-                document.getElementById( "reply-link-ping-button" )
-                    .addEventListener( "click", function () {
-                        replyDialogField.value = window.replyLinkPreloadPingTpl
-                            .replace( "##", cmtAuthor ) + replyDialogField.value;
-                    } );
-            }
-
-            // Event listener for the "Cancel" button
-            document.getElementById( "reply-link-cancel-button" )
-                .addEventListener( "click", function () {
-                    newLink.textContent = linkLabel;
-                    panelEl.remove();
-                } );
-
-            // Cancel default event handler
-            evt.preventDefault();
-            return false;
-        } ); // End event listener for the "(reply)" link
+        newLink.addEventListener( "click", handleWrapperClick( linkLabel, parent, rplyToXfdNom ) );
         newLinkWrapper.appendChild( document.createTextNode( " (" ) );
         newLinkWrapper.appendChild( newLink );
         newLinkWrapper.appendChild( document.createTextNode( ")" ) );
