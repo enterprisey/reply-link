@@ -381,7 +381,7 @@ function loadReplyLink( $, mw ) {
             if( el === null ) break;
             links = el.tagName.toLowerCase() === "a" ? [ el ]
                 : el.querySelectorAll( "a" );
-            console.log(i,"top of outer for in findUsernameInElem ",el, " links -> ",links);
+            //console.log(i,"top of outer for in findUsernameInElem ",el, " links -> ",links);
 
             // Compatibility with "Comments in Local Time"
             if( el.className.indexOf( "localcomments" ) >= 0 ) i--;
@@ -393,7 +393,7 @@ function loadReplyLink( $, mw ) {
             for( var j = 0; j < links.length; j++ ) {
                 link = links[j];
 
-                console.log(link,decodeURIComponent(link.getAttribute("href")));
+                //console.log(link,decodeURIComponent(link.getAttribute("href")));
                 if( link.className.indexOf( "mw-selflink" ) >= 0 ) {
                     return { username: currentPageName.replace( /.+:/, "" )
                         .replace( /_/g, " " ), link: link };
@@ -427,7 +427,7 @@ function loadReplyLink( $, mw ) {
      */
     function getCommentAuthor( wrapper ) {
         var sigNode = wrapper.previousSibling;
-        console.log(sigNode,sigNode.style,sigNode.style ? sigNode.style.getPropertyValue("size"):"");
+        //console.log(sigNode,sigNode.style,sigNode.style ? sigNode.style.getPropertyValue("size"):"");
         var smallOrFake = sigNode.nodeType === 1 &&
                 ( sigNode.tagName.toLowerCase() === "small" ||
                 ( sigNode.tagName.toLowerCase() === "span" &&
@@ -481,8 +481,9 @@ function loadReplyLink( $, mw ) {
         function isActualContainer( node, nodeLcTag ) {
             if( nodeLcTag === undefined ) nodeLcTag = node.tagName.toLowerCase();
             return /dd|li/.test( nodeLcTag ) ||
-                    ( nodeLcTag === "p" &&
+                    ( ( nodeLcTag === "p" || nodeLcTag === "div" ) &&
                         ( node.parentNode.className === "mw-parser-output" ||
+                            node.parentNode.className === "hover-edit-section"
                             ( node.parentNode.tagName.toLowerCase() === "section" &&
                                 node.parentNode.dataset.mwSectionId ) ) );
         }
@@ -560,7 +561,7 @@ function loadReplyLink( $, mw ) {
 
         /** From a "container elem" (dd, li, or p), remove all but the first comment. */
         function onlyFirstComment( container ) {
-            console.log("onlyFirstComment top container and container.childNodes",container,container.childNodes);
+            //console.log("onlyFirstComment top container and container.childNodes",container,container.childNodes);
             if( container.children.length === 1 && container.children[0].tagName.toLowerCase() === "small" ) {
                 console.log( "[onlyFirstComment] container only had a small in it" );
                 container = container.children[0];
@@ -601,6 +602,7 @@ function loadReplyLink( $, mw ) {
                         /^\/wiki\//, "" ) ).replace( / /g, "_" ) + ":" +
                         encodeURIComponent( hrefTokens[1] )
                             .replace( /^Contributions%2F/, "Contributions/" )
+                            .replace( /%2F/g, "/" )
                             .replace( /%23/g, "#" );
             } else {
                 var REDLINK_HREF_RGX = /^\/w\/index\.php\?title=(.+?)&action=edit&redlink=1$/;
@@ -656,7 +658,7 @@ function loadReplyLink( $, mw ) {
         // TODO: Optimization opportunity - run querySelectorAll only on the
         // section that we know contains the comment
         var psdLinks = psdDom.querySelectorAll( selector );
-        console.log("(",liveDupeLinkIdx, ")",selector, " --> ", psdLinks);
+        //console.log("(",liveDupeLinkIdx, ")",selector, " --> ", psdLinks);
 
         function normalizeTextContent( tc ) {
             return deArmorFrenchSpaces( tc );
@@ -675,7 +677,7 @@ function loadReplyLink( $, mw ) {
                 if( psdTextContent === liveTextContent ) {
                     psdCorrLinks.push( psdLinks[i] );
                 } /* else {
-                    console.log(i,"len: psd live",psdTextContent.length,liveTextContent.length);
+                    //console.log(i,"len: psd live",psdTextContent.length,liveTextContent.length);
                     for(var j = 0; j < Math.min(psdTextContent.length, liveTextContent.length); j++) {
                         if(psdTextContent.charAt(j)!==liveTextContent.charAt(j)) {
                             //console.log(i,j,"psd live", psdTextContent.codePointAt(j), liveTextContent.codePointAt( j ) );
@@ -733,7 +735,7 @@ function loadReplyLink( $, mw ) {
      */
     function findSection( psdDomString, sigLinkElem ) {
 
-        console.log(psdDomString);
+        //console.log(psdDomString);
 
         var domParser = new DOMParser(),
             psdDom = domParser.parseFromString( psdDomString, "text/html" );
@@ -782,7 +784,7 @@ function loadReplyLink( $, mw ) {
         if( tsclnId !== null ) {
             var tsclnInfoSel = "*[about='" + tsclnId + "'][typeof='mw:Transclusion']",
                 infoJson = JSON.parse( psdDom.querySelector( tsclnInfoSel ) .dataset.mw );
-            console.log(infoJson);
+            //console.log(infoJson);
             for( var i = 0; i < infoJson.parts.length; i++ ) {
                 if( infoJson.parts[i].template &&
                         infoJson.parts[i].template.target &&
@@ -838,11 +840,12 @@ function loadReplyLink( $, mw ) {
         // and ignore headings inside those.
         var ignoreSpanStarts = []; // list of ignored span beginnings
         var ignoreSpanLengths = []; // list of ignored span lengths
-        var IGNORE_RE = /(<pre>[\s\S]+?<\/pre>)|(<!--[\s\S]+?-->)/g;
+        var IGNORE_RE = /(<pre>[\s\S]+?<\/pre>)|(<source.+?>[\s\S]+?<\/source>)|(<!--[\s\S]+?-->)/g;
         var ignoreSpanMatch;
         do {
             ignoreSpanMatch = IGNORE_RE.exec( wikitext );
             if( ignoreSpanMatch ) {
+                //console.log("ignoreSpan ",ignoreSpanStarts.length," = ",ignoreSpanMatch);
                 ignoreSpanStarts.push( ignoreSpanMatch.index );
                 ignoreSpanLengths.push( ignoreSpanMatch[0].length );
             }
@@ -873,6 +876,8 @@ function loadReplyLink( $, mw ) {
                     if( headerMatch.index > ignoreSpanStarts[igIdx] ) {
                         if ( headerMatch.index + headerMatch[0].length <=
                             ignoreSpanStarts[igIdx] + ignoreSpanLengths[igIdx] ) {
+
+                            //console.log("(IGNORED, igIdx="+igIdx+") Header " + headerCounter + " (idx " + headerMatch.index + "): >" + headerMatch[0].trim() + "<");
 
                             // Invalid header
                             continue headerMatchLoop;
@@ -937,9 +942,6 @@ function loadReplyLink( $, mw ) {
         //
         //  - Spans with the class delsort-notice
         //  - Divs with the class xfd-relist
-        //  - Templates that bury signatures in divs
-        //    (e.g. resolution templates)
-        //  - Some others
         //
         // So, we grab the corresponding wikitext regions with regexes,
         // and store each region's start index in spanStartIndices, and
@@ -950,12 +952,10 @@ function loadReplyLink( $, mw ) {
         var spanLengths = [];
         var DELSORT_SPAN_RE_TXT = /<small class="delsort-notice">(?:<small>.+?<\/small>|.)+?<\/small>/.source;
         var XFD_RELIST_RE_TXT = /<div class="xfd_relist"[\s\S]+?<\/div>(\s*|<!--.+?-->)*/.source;
-        var TEMPLATES_RE_TXT = /\{\{moved discussion (to|from)\|.+?\}\}/.source;
         var STRUCK_RE_TXT = /<s>.+?<\/s>/.source;
         var SKIP_REGION_RE = new RegExp("(" + DELSORT_SPAN_RE_TXT + ")|(" +
             XFD_RELIST_RE_TXT + ")|(" +
-            STRUCK_RE_TXT + ")|(" +
-            TEMPLATES_RE_TXT + ")", "ig");
+            STRUCK_RE_TXT + ")", "ig");
         var skipRegionMatch;
         do {
             skipRegionMatch = SKIP_REGION_RE.exec( sectionWikitext );
@@ -992,16 +992,14 @@ function loadReplyLink( $, mw ) {
         var matchIdxEnd;
         var dstSpnIdx;
 
-        console.log(sectionWikitext);
-
         sigMatchLoop:
         for( ; true ; matchIdx++ ) {
             match = sigRgx.exec( sectionWikitext );
             if( !match ) {
-                console.log("[sigIdxToStrIdx] out of matches");
+                console.error("[sigIdxToStrIdx] out of matches");
                 return -1;
             }
-            console.log( "sig match (matchIdx = " + matchIdx + ") is >" + match[0] + "< (index = " + match.index + ")" );
+            //console.log( "sig match (matchIdx = " + matchIdx + ") is >" + match[0] + "< (index = " + match.index + ")" );
 
             matchIdxEnd = match.index + match[0].length;
 
@@ -1114,7 +1112,7 @@ function loadReplyLink( $, mw ) {
         // Walk backwards until non-empty line
         while( replyLine >= 1 && candidateLines[replyLine - 1].trim() === "" ) replyLine--;
 
-        console.log( "replyLine = " + replyLine );
+        //console.log( "replyLine = " + replyLine );
 
         // Splice into slicedSecWikitext
         slicedSecWikitext = candidateLines
@@ -1150,7 +1148,7 @@ function loadReplyLink( $, mw ) {
      * Returns a Deferred that resolves/rejects when the reply succeeds/fails.
      */
     function doReply( indentation, header, sigIdx, cmtAuthorDom, rplyToXfdNom, revObj, findSectionResult ) {
-        console.log("TOP OF doReply",header,findSectionResult);
+        //console.log("TOP OF doReply",header,findSectionResult);
         header = [ "" + findSectionResult.sectionLevel, findSectionResult.sectionName, findSectionResult.sectionIdx ];
         var deferred = $.Deferred();
 
@@ -1311,13 +1309,17 @@ function loadReplyLink( $, mw ) {
             }
             var summary = "/* " + sectionHeader + " */ " + summaryCore + ADVERT;
 
+            mw.notify("WAITING FIVE SECONDS");
+            setTimeout(function(){
+
             // Send another request, this time to actually edit the
             // page
             api.postWithToken( "csrf", {
                 action: "edit",
                 title: mw.config.get( "wgPageName" ),
                 summary: summary,
-                text: newWikitext
+                text: newWikitext,
+                basetimestamp: revObj.timestamp
             } ).done ( function ( data ) {
 
                 // We put this function on the window object because we
@@ -1354,7 +1356,7 @@ function loadReplyLink( $, mw ) {
 
                     deferred.reject();
                 }
-                console.log(data);
+                //console.log(data);
                 document.getElementById( "reply-dialog-field" ).style["background-image"] = "";
             } ).fail ( function( code, result ) {
                 setStatus( "While replying, the edit failed." );
@@ -1362,6 +1364,8 @@ function loadReplyLink( $, mw ) {
                 console.log(result);
                 deferred.reject();
             } );
+
+            }, 5000);
         } catch ( e ) {
             setStatusError( e );
             deferred.reject();
@@ -1437,7 +1441,6 @@ function loadReplyLink( $, mw ) {
                     "<td id='reply-dialog-status'></span><div style='clear:left'></td></tr></table>" +
                     "<div id='reply-link-options' class='gone-on-empty' style='margin-top: 0.5em'></div>" +
                     "<div id='reply-link-preview' class='gone-on-empty' style='border: thin dashed gray; padding: 0.5em; margin-top: 0.5em'></div>";
-                mw.util.addCSS( ".gone-on-empty:empty { display: none; }" );
                 parent.insertBefore( panelEl, newLinkWrapper.nextSibling );
                 var replyDialogField = document.getElementById( "reply-dialog-field" );
                 replyDialogField.style = "padding: 0.625em; min-height: 10em; margin-bottom: 0.75em;";
@@ -1632,7 +1635,7 @@ function loadReplyLink( $, mw ) {
         newLink.dataset.originalLabel = linkLabel;
         newLink.appendChild( document.createTextNode( linkLabel ) );
         newLink.addEventListener( "click", handleWrapperClick( linkLabel, parent, rplyToXfdNom ) );
-        newLinkWrapper.appendChild( document.createTextNode( " (" ) );
+        newLinkWrapper.appendChild( document.createTextNode( "(" ) );
         newLinkWrapper.appendChild( newLink );
         newLinkWrapper.appendChild( document.createTextNode( ")" ) );
 
@@ -1719,11 +1722,11 @@ function loadReplyLink( $, mw ) {
                 case "dl": newIndentSymbol = ":"; break;
                 case "ul": newIndentSymbol = "*"; break;
                 case "ol": newIndentSymbol = "#"; break;
-                case "div":
-                    if( node.className !== "hover-edit-section" ) {
-                        continue;
-                    }
-                    break;
+                //case "div":
+                //    if( node.className !== "hover-edit-section" ) {
+                //        continue;
+                //    }
+                //    break;
                 default: newIndentSymbol = ""; break;
                 }
 
@@ -1797,6 +1800,12 @@ function loadReplyLink( $, mw ) {
             }
         }
         //console.log(metadata);
+
+        // Disable links inside hatnotes, archived discussions
+        var insideArchived = mainContent.querySelectorAll( "div.archived .reply-link-wrapper,div.resolved .reply-link-wrapper" );
+        for( var i = 0; i < insideArchived.length; i++ ) {
+            insideArchived[i].parentNode.removeChild( insideArchived[i] );
+        }
     }
 
     function runTestMode() {
@@ -1879,7 +1888,9 @@ function loadReplyLink( $, mw ) {
 
         mw.util.addCSS(
             "#reply-link-panel { padding: 1em; margin-left: 1.6em; "+
-              "max-width: 1200px; width: 66%; margin-top: 0.5em; }"
+              "max-width: 1200px; width: 66%; margin-top: 0.5em; }"+
+            ".gone-on-empty:empty { display: none; }"+
+            ".reply-link-wrapper { margin-left: 0.3em }"
         );
 
         // Pre-load interface messages; we will check again when a (reply)
