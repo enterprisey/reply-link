@@ -1545,8 +1545,7 @@ function loadReplyLink( $, mw ) {
                 // Event listener for the "Preview" button
                 document.getElementById( "reply-link-preview-button" )
                     .addEventListener( "click", function () {
-                        var sanitizedCode = document.getElementById( "reply-dialog-field" ).value
-                                .replace( /&/g, "%26" );
+                        var sanitizedCode = encodeURIComponent( document.getElementById( "reply-dialog-field" ).value );
                         $.post( "https:" + mw.config.get( "wgServer" ) +
                             "/api/rest_v1/transform/wikitext/to/html/" + encodeURIComponent( currentPageName ),
                             "wikitext=" + sanitizedCode + "&body_only=true",
