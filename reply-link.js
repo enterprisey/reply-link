@@ -4,7 +4,7 @@ function loadReplyLink( $, mw ) {
     var TIMESTAMP_REGEX = /\(UTC(?:(?:−|\+)\d+?(?:\.\d+)?)?\)\S*?\s*$/m;
     var EDIT_REQ_REGEX = /^((Semi|Template|Extended-confirmed)-p|P)rotected edit request on \d\d? \w+ \d{4}/;
     var EDIT_REQ_TPL_REGEX = /\{\{edit (template|fully|extended|semi)-protected\s*(\|.+?)*\}\}/;
-    var SIGNATURE = "~~" + "~~"; // split up because it might get processed
+    var LITERAL_SIGNATURE = "~~" + "~~"; // split up because it might get processed
     var ADVERT = " ([[w:en:User:Enterprisey/reply-link|reply-link]])";
     var PARSOID_ENDPOINT = "https:" + mw.config.get( "wgServer" ) + "/api/rest_v1/page/html/";
     var HEADER_SELECTOR = "h1,h2,h3,h4,h5,h6";
@@ -24,12 +24,20 @@ function loadReplyLink( $, mw ) {
         "//pt.wikipedia.org": /\d\dh\d\dmin\sde \d{1,2} de \w+? de \d{4}/.source
     }
 
+    // Shared API object
+    var api;
+
     /*
-     * Regex *source* for a signature link prefix. Basically the
+     * Regex *sources* for a "userspace" link. Basically the
      * localized equivalent of User( talk)?|Special:Contributions/
-     * Initialized near the top of the closure in handleWrapperClick.
+     * Initialized in buildUserspcLinkRgx, which is called near the top
+     * of the closure in handleWrapperClick.
+     *
+     * Three subproperties: und for underscores instead of spaces (e.g.
+     * "User_talk"), spc for spaces (e.g. "User talk"), and both for
+     * a regex combining the two (used for matching on wikitext).
      */
-    var sigLinkPfxRgx = null;
+    var userspcLinkRgx = null;
 
     /**
      * This dictionary is some global state that holds three pieces of
@@ -90,6 +98,11 @@ function loadReplyLink( $, mw ) {
     var replyWasSaved = false;
 
     /**
+     * Cache for getWikitext. Only useful in test mode.
+     */
+    var getWikitextCache = {};
+
+    /**
      * Get the formatted namespace name for a namespace ID.
      * Quick ref: user = 2, proj = 4
      */
@@ -102,6 +115,16 @@ function loadReplyLink( $, mw ) {
      */
     function escapeForRegex( s ) {
         return s.replace( /[-\/\\^$*+?.()|[\]{}]/g, '\\$&' );
+    }
+
+    /*
+     * MediaWiki turns spaces before certain punctuation marks
+     * into non-breaking spaces, so fix those. This is done by
+     * the armorFrenchSpaces function in Mediawiki, in the file
+     * /includes/parser/Sanitizer.php
+     */
+    function deArmorFrenchSpaces( text ) {
+        return text.replace( /\xA0([?:;!%»›])/g, " $1" );
     }
 
     /**
@@ -158,11 +181,38 @@ function loadReplyLink( $, mw ) {
         console.error(e);
         setStatus( "There was an error while replying! Please leave a note at " +
             "<a href='https://en.wikipedia.org/wiki/User_talk:Enterprisey/reply-link'>the script's talk page</a>" +
-            " with any errors in the browser console, if possible." );
+            " with any errors in <a href='https://en.wikipedia.org/wiki/WP:JSERROR'>the browser console</a>, if possible." );
         if( e.message ) {
             console.log( "Content request error: " + JSON.stringify( e.message ) );
         }
         throw e;
+    }
+
+    /**
+     * Process HTML character entities.
+     * From https://stackoverflow.com/a/46851765
+     */
+    function processCharEntities( text ) {
+        var el = document.createElement('div');
+        return text.replace( /\&[#0-9a-z]+;/gi, function ( enc ) {
+            el.innerHTML = enc;
+            return el.innerText
+        } );
+    }
+
+    /**
+     * Given some wikitext, processes it to get just the text content.
+     * This function should be identical to the MediaWiki function
+     * that gets the wikitext between the equal signs and comes up
+     * with the id's that anchor the headers.
+     */
+    function wikitextToTextContent( wikitext ) {
+        return decodeURIComponent( processCharEntities( wikitext ) )
+            .replace( /\[\[:?(?:[^\|]+?\|)?([^\]\|]+?)\]\]/g, "$1" )
+            .replace( /\{\{\s*tl\s*\|\s*(.+?)\s*\}\}/g, "{{$1}}" )
+            .replace( /\{\{\s*[Uu]\s*\|\s*(.+?)\s*\}\}/g, "$1" )
+            .replace( /('''?)(.+?)\1/g, "$2" )
+            .replace( /<span.*?>(.*?)<\/span>/g, "$1" );
     }
 
     /**
@@ -198,7 +248,11 @@ function loadReplyLink( $, mw ) {
      * Gets the wikitext of a page with the given title (namespace required).
      * Returns an object with keys "content" and "timestamp".
      */
-    function getWikitext( title ) {
+    function getWikitext( title, useCaching ) {
+        if( useCaching === undefined ) useCaching = false;
+        if( useCaching && getWikitextCache[ title ] ) {
+            return $.when( getWikitextCache[ title ] );
+        }
         return $.getJSON(
             mw.util.wikiScript( "api" ),
             {
@@ -214,23 +268,38 @@ function loadReplyLink( $, mw ) {
             var pageId = Object.keys( data.query.pages )[0];
             if( data.query.pages[pageId].revisions ) {
                 var revObj = data.query.pages[pageId].revisions[0];
-                return { timestamp: revObj.timestamp, content: revObj.slots.main["*"] };
+                var result = { timestamp: revObj.timestamp, content: revObj.slots.main["*"] };
+                getWikitextCache[ title ] = result;
+                return result;
             }
             return {};
         } );
     }
 
     /**
-     * Given some wikitext, processes it to get just the text content.
-     * This function should be identical to the MediaWiki function
-     * that gets the wikitext between the equal signs and comes up
-     * with the id's that anchor the headers.
+     * Creates userspcLinkRgx. Called in handleWrapperClick and the test
+     * runner at the bottom.
      */
-    function wikitextToTextContent( wikitext ) {
-        return wikitext.replace( /\[\[:?(?:[^\|]+?\|)?([^\]\|]+?)\]\]/g, "$1" )
-            .replace( /\{\{\s*tl\s*\|\s*(.+?)\s*\}\}/g, "{{$1}}" )
-            .replace( /('''?)(.+?)\1/g, "$2" )
-            .replace( /<span.*?>(.*?)<\/span>/g, "$1" );
+    function buildUserspcLinkRgx() {
+        var nsIdMap = mw.config.get( "wgNamespaceIds" );
+        var nsRgxFragments = [];
+        var contribsSecondFrag = ":" + escapeForRegex( mw.messages.get( "mycontris" ) ) + "\\/";
+        for( var nsName in nsIdMap ) {
+            if( !nsIdMap.hasOwnProperty( nsName ) ) continue;
+            switch( nsIdMap[nsName] ) {
+                case 2:
+                case 3:
+                    nsRgxFragments.push( escapeForRegex( capFirstLetter( nsName ) ) + "\\s*:" );
+                    break;
+                case -1:
+                    nsRgxFragments.push( escapeForRegex( capFirstLetter( nsName ) ) + contribsSecondFrag );
+                    break;
+            }
+        }
+        userspcLinkRgx = {};
+        userspcLinkRgx.spc = "(?:" + nsRgxFragments.join( "|" ).replace( /_/g, " " ) + ")";
+        userspcLinkRgx.und = userspcLinkRgx.spc.replace( / /g, "_" );
+        userspcLinkRgx.both = "(?:" + userspcLinkRgx.spc + "|" + userspcLinkRgx.und + ")";
     }
 
     /**
@@ -240,7 +309,7 @@ function loadReplyLink( $, mw ) {
     function hasSig( text ) {
 
         // no literal signature?
-        if( text.indexOf( SIGNATURE ) < 0 ) return false;
+        if( text.indexOf( LITERAL_SIGNATURE ) < 0 ) return false;
 
         // if there's a literal signature and no nowiki elements,
         // there must be a real signature
@@ -262,12 +331,12 @@ function loadReplyLink( $, mw ) {
         // So that we don't check every ignore span every time
         var nowikiSpanStartIdx = 0;
 
-        var SIG_RE = new RegExp( SIGNATURE, "g" );
+        var LIT_SIG_RE = new RegExp( LITERAL_SIGNATURE, "g" );
         var sigMatch;
 
         matchLoop:
         do {
-            sigMatch = SIG_RE.exec( text );
+            sigMatch = LIT_SIG_RE.exec( text );
             if( sigMatch ) {
 
                 // Check that we're not inside a nowiki
@@ -309,8 +378,10 @@ function loadReplyLink( $, mw ) {
         if( !el ) return null;
         var links;
         for( let i = 0; i < 3; i++ ) {
+            if( el === null ) break;
             links = el.tagName.toLowerCase() === "a" ? [ el ]
                 : el.querySelectorAll( "a" );
+            console.log(i,"top of outer for in findUsernameInElem ",el, " links -> ",links);
 
             // Compatibility with "Comments in Local Time"
             if( el.className.indexOf( "localcomments" ) >= 0 ) i--;
@@ -322,19 +393,19 @@ function loadReplyLink( $, mw ) {
             for( var j = 0; j < links.length; j++ ) {
                 link = links[j];
 
+                console.log(link,decodeURIComponent(link.getAttribute("href")));
                 if( link.className.indexOf( "mw-selflink" ) >= 0 ) {
                     return { username: currentPageName.replace( /.+:/, "" )
                         .replace( /_/g, " " ), link: link };
                 }
-                console.log(link,decodeURIComponent(link.getAttribute("href")));
 
                 // Also matches redlinks. Why people have redlinks in their sigs on
                 // purpose, I may never know.
-                console.log( "^\\/(?:wiki\\/" + sigLinkPfxRgx + /(.+?)(?:\/.+?)?(?:#.+)?|w\/index\.php\?title=User(?:_talk)?:(.+?)&action=edit&redlink=1/.source + ")$" )
-                var sigLinkRe = new RegExp( "^\\/(?:wiki\\/" + sigLinkPfxRgx + /(.+?)(?:\/.+?)?(?:#.+)?|w\/index\.php\?title=User(?:_talk)?:(.+?)&action=edit&redlink=1/.source + ")$" );
+                //console.log( "^\\/(?:wiki\\/" + userspcLinkRgx.und + /(.+?)(?:\/.+?)?(?:#.+)?|w\/index\.php\?title=User(?:_talk)?:(.+?)&action=edit&redlink=1/.source + ")$" )
+                var sigLinkRe = new RegExp( "^\\/(?:wiki\\/" + userspcLinkRgx.und + /(.+?)(?:\/.+?)?(?:#.+)?|w\/index\.php\?title=/.source + userspcLinkRgx.und + /(.+?)&action=edit&redlink=1/.source + ")$" );
                 var usernameMatch = sigLinkRe.exec( decodeURIComponent( link.getAttribute( "href" ) ) );
                 if( usernameMatch ) {
-                console.log("usernameMatch",usernameMatch)
+                //console.log("usernameMatch",usernameMatch)
                     var rawUsername = usernameMatch[1] ? usernameMatch[1] : usernameMatch[2];
                     return {
                         username: decodeURIComponent( rawUsername ).replace( /_/g, " " ),
@@ -356,9 +427,13 @@ function loadReplyLink( $, mw ) {
      */
     function getCommentAuthor( wrapper ) {
         var sigNode = wrapper.previousSibling;
-        var possUserLinkElem = ( sigNode.nodeType === 1 &&
-                sigNode.tagName.toLowerCase() === "small" &&
-                sigNode.children.length > 1 )
+        console.log(sigNode,sigNode.style,sigNode.style ? sigNode.style.getPropertyValue("size"):"");
+        var smallOrFake = sigNode.nodeType === 1 &&
+                ( sigNode.tagName.toLowerCase() === "small" ||
+                ( sigNode.tagName.toLowerCase() === "span" &&
+                    sigNode.style && sigNode.style.getPropertyValue( "font-size" ) === "85%" ) );
+
+        var possUserLinkElem = ( smallOrFake && sigNode.children.length > 1 )
             ? sigNode.children[sigNode.children.length-1]
             : sigNode.previousElementSibling;
         return findUsernameInElem( possUserLinkElem );
@@ -372,7 +447,7 @@ function loadReplyLink( $, mw ) {
     function markEditReqAnswered( sectionWikitext ) {
         var editReqMatch = EDIT_REQ_TPL_REGEX.exec( sectionWikitext );
         if( !editReqMatch ) {
-            console.log( "Couldn't find an edit request!" );
+            console.error( "Couldn't find an edit request!" );
             return sectionWikitext;
         }
 
@@ -394,9 +469,12 @@ function loadReplyLink( $, mw ) {
     }
 
     /**
-     * Ascend until dd or li, or a p directly under div.mw-parser-output
+     * Ascend until dd or li, or a p directly under div.mw-parser-output.
+     * live is true if we're on the live DOM (and thus we have our own UI
+     * elements to deal with) and false if we're on the psd DOM.
      */
-    function ascendToCommentContainer( currNode, recordPath ) {
+    function ascendToCommentContainer( startNode, live, recordPath ) {
+        var currNode = startNode;
         if( recordPath === undefined ) recordPath = false;
         var path = [];
         var lcTag;
@@ -408,17 +486,23 @@ function loadReplyLink( $, mw ) {
                             ( node.parentNode.tagName.toLowerCase() === "section" &&
                                 node.parentNode.dataset.mwSectionId ) ) );
         }
+        var smallContainerNodeLimit = live ? 3 : 1;
         do {
             currNode = currNode.parentNode;
-            console.log("asc",currNode);
             lcTag = currNode.tagName.toLowerCase();
             if( lcTag === "html" ) {
                 console.error( "ascendToCommentContainer reached root" );
                 break;
             }
             if( recordPath ) path.unshift( currNode );
+            //console.log( "checking isActualContainer for ", currNode, isActualContainer( currNode, lcTag ),
+            //        lcTag === "small", isActualContainer( currNode.parentNode ),
+            //            currNode.parentNode.childNodes,
+            //            currNode.parentNode.childNodes.length );
         } while( !isActualContainer( currNode, lcTag ) &&
-            !( lcTag === "small" && isActualContainer( currNode.parentNode ) ) );
+            !( lcTag === "small" && isActualContainer( currNode.parentNode ) &&
+                currNode.parentNode.childNodes.length <= smallContainerNodeLimit ) );
+        //console.log("ascendToCommentContainer from ",startNode," terminating, r.v. ",recordPath?path:currNode);
         return recordPath ? path : currNode;
     }
 
@@ -433,14 +517,21 @@ function loadReplyLink( $, mw ) {
         
         // Does this node have a timestamp in it?
         function hasTimestamp( node ) {
-            console.log (node, node.nodeType === 3,
-                        TIMESTAMP_REGEX.test( node.textContent.trim() ),
-                    node.childNodes.length === 1,
-                        node.childNodes.length && TIMESTAMP_REGEX.test( node.childNodes[0].textContent.trim()));
-            return ( node.nodeType === 3 &&
-                        TIMESTAMP_REGEX.test( node.textContent.trim() ) ) ||
+            //console.log ("hasTimestamp ",node, node.nodeType === 3,node.textContent.trim(),
+            //            TIMESTAMP_REGEX.test( node.textContent.trim() ),
+            //        node.childNodes.length === 1,
+            //            node.childNodes.length && TIMESTAMP_REGEX.test( node.childNodes[0].textContent.trim()),
+            //        " => ",( node.nodeType === 3 &&
+            //                TIMESTAMP_REGEX.test( node.textContent.trim() ) ) ||
+            //           ( node.childNodes.length === 1 &&
+            //                TIMESTAMP_REGEX.test( node.childNodes[0].textContent.trim() ) ) );
+            //console.log(node,node.textContent.trim(),TIMESTAMP_REGEX.test(node.textContent.trim()));
+            var validTag = node.nodeType === 3 || ( node.nodeType === 1 &&
+                            ( node.tagName.toLowerCase() === "small" ||
+                                node.tagName.toLowerCase() === "span" ) );
+            return ( validTag && TIMESTAMP_REGEX.test( node.textContent.trim() ) ||
                    ( node.childNodes.length === 1 &&
-                        TIMESTAMP_REGEX.test( node.childNodes[0].textContent.trim() ) );
+                        TIMESTAMP_REGEX.test( node.childNodes[0].textContent.trim() ) ) );
         }
 
         // Get prefix that's the actual comment
@@ -469,17 +560,28 @@ function loadReplyLink( $, mw ) {
 
         /** From a "container elem" (dd, li, or p), remove all but the first comment. */
         function onlyFirstComment( container ) {
-            console.log("onlyFirstComment",container.childNodes);
+            console.log("onlyFirstComment top container and container.childNodes",container,container.childNodes);
             if( container.children.length === 1 && container.children[0].tagName.toLowerCase() === "small" ) {
+                console.log( "[onlyFirstComment] container only had a small in it" );
                 container = container.children[0];
             }
-            var i, childNodes = container.childNodes;
-            for( i = 0; i < childNodes.length; i++ ) {
-                if( hasTimestamp( childNodes[i] ) ) break;
+            var i, autosignedIdx, autosigned = container.querySelector( "small.autosigned" );
+            if( autosigned && ( autosignedIdx = iterableToList(
+                    container.childNodes ).indexOf( autosigned ) ) >= 0 ) {
+                i = autosignedIdx;
+            } else {
+                var childNodes = container.childNodes;
+                for( i = 0; i < childNodes.length; i++ ) {
+                    if( hasTimestamp( childNodes[i] ) ) {
+                        //console.log( "[oFC] found a timestamp in ",childNodes[i]);
+                        break;
+                    }
+                }
+                if( i === childNodes.length ) {
+                    throw new Error( "[onlyFirstComment] No timestamp found" );
+                }
             }
-            if( i === childNodes.length ) {
-                throw new Error( "[onlyFirstComment] No timestamp found" );
-            }
+            //console.log("[onlyFirstComment] killing all after ",i,container.childNodes[i]);
             i++;
             var elemToRemove;
             while( elemToRemove = container.childNodes[i] ) {
@@ -493,18 +595,20 @@ function loadReplyLink( $, mw ) {
             newHref = "./" + currentPageName; 
         } else {
             if( /^\/wiki/.test( liveHref ) ) {
-                newHref = liveHref.replace( /^\/wiki/, "." )
-                        .replace( /\/(.+?):/, function ( _, p1 ) {
-                            return "/" + canonicalizeNs( p1 ).replace( / /g, "_" ) + ":";
-                        } );
+                var hrefTokens = liveHref.split( ":" );
+                if( hrefTokens.length !== 2 ) throw new Error( "Malformed href" );
+                newHref = "./" + canonicalizeNs( hrefTokens[0].replace(
+                        /^\/wiki\//, "" ) ).replace( / /g, "_" ) + ":" +
+                        encodeURIComponent( hrefTokens[1] )
+                            .replace( /^Contributions%2F/, "Contributions/" )
+                            .replace( /%23/g, "#" );
             } else {
-                var REDLINK_HREF_RGX = new RegExp( /^\/w\/index\.php\?title=/.source +
-                        "((?:" + fmtNs( 2 ) + "|" + fmtNs( 3 ) + "):.+?)" + /&action=edit&redlink=1$/.source );
+                var REDLINK_HREF_RGX = /^\/w\/index\.php\?title=(.+?)&action=edit&redlink=1$/;
                 newHref = "./" + REDLINK_HREF_RGX.exec( liveHref )[1];
             }
         }
-        var livePath = ascendToCommentContainer( sigLinkElem, /* recordPath */ true );
-        console.log("livePath",livePath)
+        var livePath = ascendToCommentContainer( sigLinkElem, /* live */ true, /* recordPath */ true );
+        //console.log("livePath",livePath)
 
         // Deal with the case where the comment has multiple links to
         // sigLinkElem's href; we will store the index of the link we want.
@@ -514,11 +618,20 @@ function loadReplyLink( $, mw ) {
         if( !liveDupeLinks ) throw new Error( "Couldn't select live dupe link" );
         var liveDupeLinkIdx = ( liveDupeLinks.length > 1 )
                 ? iterableToList( liveDupeLinks ).indexOf( sigLinkElem ) : null;
-        console.log(liveDupeLinkIdx);
+        //console.log("liveDupeLinkIdx",liveDupeLinkIdx);
 
+        //console.log("livePath[0]",livePath[0],livePath[0].childNodes);
         var liveClone = livePath[0].cloneNode( /* deep */ true );
+        
+        // Remove our own UI elements
+        var ourUiSelector = ".reply-link-wrapper,#reply-link-panel";
+        iterableToList( liveClone.querySelectorAll( ourUiSelector ) ).forEach( function ( n ) {
+            n.parentNode.removeChild( n );
+        } );
+
+        //console.log("liveClone",liveClone,liveClone.childNodes);
         onlyFirstComment( liveClone );
-        console.log(liveClone.childNodes);
+        //console.log("liveClone.childNodes",liveClone.childNodes);
 
         // Process it a bit to make it look a bit more like the Parsoid output
         var liveAutoNumberedLinks = liveClone.querySelectorAll( "a.external.autonumber" );
@@ -534,7 +647,7 @@ function loadReplyLink( $, mw ) {
         // operation a second time, even though we already called onlyFirstComment
         // on it.
         var liveTextContent = surrTextContentFromElem( liveClone );
-        console.log("liveTextContent",liveTextContent);
+        //console.log("liveTextContent",liveTextContent);
 
         var selector = livePath.map( function ( node ) {
             return node.tagName.toLowerCase();
@@ -543,28 +656,46 @@ function loadReplyLink( $, mw ) {
         // TODO: Optimization opportunity - run querySelectorAll only on the
         // section that we know contains the comment
         var psdLinks = psdDom.querySelectorAll( selector );
-        console.log(selector, " --> ", psdLinks);
+        console.log("(",liveDupeLinkIdx, ")",selector, " --> ", psdLinks);
+
+        function normalizeTextContent( tc ) {
+            return deArmorFrenchSpaces( tc );
+        }
+
+        liveTextContent = normalizeTextContent( liveTextContent );
 
         // Narrow down by entire textContent of list element
         var psdCorrLinks = []; // the corresponding link elem(s)
         if( liveDupeLinkIdx === null ) {
             for( var i = 0; i < psdLinks.length; i++ ) {
-                var psdTextContent = surrTextContentFromElem( ascendToCommentContainer( psdLinks[i] ) );
-                console.log(psdTextContent);
+                var psdContainer = ascendToCommentContainer( psdLinks[i], /* live */ false, true );
+                //console.log("psdContainer",psdContainer);
+                var psdTextContent = normalizeTextContent( surrTextContentFromElem( psdContainer[0] ) );
+                //console.log(i,psdTextContent);
                 if( psdTextContent === liveTextContent ) {
                     psdCorrLinks.push( psdLinks[i] );
-                }
+                } /* else {
+                    console.log(i,"len: psd live",psdTextContent.length,liveTextContent.length);
+                    for(var j = 0; j < Math.min(psdTextContent.length, liveTextContent.length); j++) {
+                        if(psdTextContent.charAt(j)!==liveTextContent.charAt(j)) {
+                            //console.log(i,j,"psd live", psdTextContent.codePointAt(j), liveTextContent.codePointAt( j ) );
+                            break;
+                        }
+                    }
+                } */
             }
         } else {
             for( var i = 0; i < psdLinks.length; i++ ) {
-                var psdContainer = ascendToCommentContainer( psdLinks[i] );
+                var psdContainer = ascendToCommentContainer( psdLinks[i], /* live */ false );
                 if( psdContainer.dataset.replyLinkGeCorrCo ) continue;
-                var psdTextContent = surrTextContentFromElem( psdContainer );
-                console.log(psdTextContent);
+                var psdTextContent = normalizeTextContent( surrTextContentFromElem( psdContainer ) );
+                //console.log(psdTextContent);
                 if( psdTextContent === liveTextContent ) {
                     var psdDupeLinks = psdContainer.querySelectorAll( "a[href='" + newHref + "']" );
                     psdCorrLinks.push( psdDupeLinks[ liveDupeLinkIdx ] );
                 }
+
+                // Flag to ensure we don't take a link from this container again
                 psdContainer.dataset.replyLinkGeCorrCo = true;
             }
         }
@@ -610,7 +741,7 @@ function loadReplyLink( $, mw ) {
         var corrLink = getCorrCmt( psdDom, sigLinkElem );
         //console.log("STEP 1 SUCCESS",corrLink);
 
-        var corrCmt = ascendToCommentContainer( corrLink );
+        var corrCmt = ascendToCommentContainer( corrLink, /* live */ false );
 
         // Ascend until we hit something in a transclusion
         var currNode = corrLink;
@@ -646,41 +777,44 @@ function loadReplyLink( $, mw ) {
             currNode = currNode.parentNode;
         } while( currNode.tagName.toLowerCase() !== "body" );
 
-        // Now, get the index of our nearest header
+        // Get the target page (page actually containing the comment)
+        var targetPage;
+        if( tsclnId !== null ) {
+            var tsclnInfoSel = "*[about='" + tsclnId + "'][typeof='mw:Transclusion']",
+                infoJson = JSON.parse( psdDom.querySelector( tsclnInfoSel ) .dataset.mw );
+            console.log(infoJson);
+            for( var i = 0; i < infoJson.parts.length; i++ ) {
+                if( infoJson.parts[i].template &&
+                        infoJson.parts[i].template.target &&
+                        infoJson.parts[i].template.target.wt &&
+                        infoJson.parts[i].template.target.wt.indexOf( ":" ) >= 0 ) {
+                    targetPage = infoJson.parts[i].template.target.wt;
+                }
+            }
+        }
+        if( targetPage && targetPage.charAt( 0 ) === "/" ) {
+
+            // Given relative to the current page
+            targetPage = currentPageName + targetPage;
+        } else if( !targetPage ) {
+            if( tsclnId !== null ) tsclnId = null;
+            targetPage = currentPageName;
+        }
+
+        // Finally, get the index of our nearest header
         var headerIdx = iterableToList( psdDom.querySelectorAll( HEADER_SELECTOR ) )
                 .filter( function ( header ) {
                     return ( header.getAttribute( "about" ) || null ) === tsclnId;
                 } )
                 .indexOf( nearestHeader );
 
-        // Finally, get the target page (page actually containing the comment)
-        var targetPage;
-        if( tsclnId === null ) {
-            targetPage = currentPageName;
-        } else {
-            var tsclnInfoSel = "*[about='" + tsclnId + "'][typeof='mw:Transclusion']",
-                infoJson = JSON.parse( psdDom.querySelector( tsclnInfoSel ) .dataset.mw );
-            for( var i = 0; i < infoJson.parts.length; i++ ) {
-                if( infoJson.parts[i].template &&
-                        infoJson.parts[i].template.target &&
-                        infoJson.parts[i].template.target.wt ) {
-                    targetPage = infoJson.parts[i].template.target.wt;
-                }
-            }
-        }
-
-console.log({
-            page: targetPage,
-            sectionIdx: headerIdx,
-            sectionName: nearestHeader.textContent,
-            sectionLevel: nearestHeader.tagName.substring( 1 )
-        })
-        return {
+        var result = {
             page: targetPage,
             sectionIdx: headerIdx,
             sectionName: nearestHeader.textContent,
             sectionLevel: nearestHeader.tagName.substring( 1 )
         };
+        return result;
     }
 
     /**
@@ -755,11 +889,7 @@ console.log({
                 if( headerCounter === sectionIdx ) {
                     var sanitizedWktxtSectionName = wikitextToTextContent( headerMatch[2] );
 
-                    // MediaWiki turns spaces before certain punctuation marks
-                    // into non-breaking spaces, so fix those. This is done by
-                    // the armorFrenchSpaces function in Mediawiki, in the file
-                    // /includes/parser/Sanitizer.php
-                    sectionName = sectionName.replace( /\xA0([?:;!%»›])/g, " $1" );
+                    sectionName = deArmorFrenchSpaces( sectionName );
 
                     if( sanitizedWktxtSectionName !== sectionName ) {
                         throw new Error( "Sanity check on header name failed! Found \"" +
@@ -784,7 +914,7 @@ console.log({
         // then the target was the last one and the slice will go
         // until the end of wikitext
         if( endIdx < 0 ) {
-            console.log("[getSectionWikitext] endIdx negative, setting to " + wikitext.length);
+            //console.log("[getSectionWikitext] endIdx negative, setting to " + wikitext.length);
             endIdx = wikitext.length;
         }
 
@@ -801,9 +931,7 @@ console.log({
      * Returns -1 if we couldn't find anything.
      */
     function sigIdxToStrIdx( sectionWikitext, sigIdx ) {
-        console.log( "In sigIdxToStrIdx, sigIdx = " + sigIdx );
-        //var SIG_REGEX_ALT = /(?:\[\[\s*(?:[Uu]ser|Special:Contributions\/).*\]\].*?\d\d:\d\d,\s\d{1,2}\s\w+?\s\d\d\d\d\s\(UTC\)|class\s*=\s*"autosigned".+?\(UTC\)<\/small>)/gm;
-        //console.log( "In sigIdxToStrIdx, sectionWikitext = >>>" + sectionWikitext + "<<<" );
+        //console.log( "In sigIdxToStrIdx, sigIdx = " + sigIdx );
 
         // There are certain regions that we skip while attaching links:
         //
@@ -814,10 +942,10 @@ console.log({
         //  - Some others
         //
         // So, we grab the corresponding wikitext regions with regexes,
-        // and store each region's start index in spanStartIndices,
-        // and each region's length in spanLengths. Then, whenever
-        // we find a signature with the right index, we check if it's
-        // included in one of these regions before we return it.
+        // and store each region's start index in spanStartIndices, and
+        // each region's length in spanLengths. Then, whenever we find a
+        // signature with the right index, if it's included in one of
+        // these regions, we skip it and move on.
         var spanStartIndices = [];
         var spanLengths = [];
         var DELSORT_SPAN_RE_TXT = /<small class="delsort-notice">(?:<small>.+?<\/small>|.)+?<\/small>/.source;
@@ -852,19 +980,22 @@ console.log({
          *
          * It's also localized.
          */
-        var sigRgxSrc = "(?:" + /\[\[\s*:?\s*/.source + "(" + sigLinkPfxRgx.replace( /_/g, " " ) + /([^\]]||\](?!\]))*?/.source + ")" + /\]\]\)?([^\[]|\[(?!\[)|\[\[(?!User(\s+talk)?:))*?/.source + DATE_FMT_RGX[mw.config.get( "wgServer" )] + /\s+\(UTC\)|class\s*=\s*"autosigned".+?\(UTC\)<\/small>/.source + ")" + /(([ \t\f]|<!--.*?-->)*(?!\S)|\S+([ \t\f]|<!--.*?-->)*)$/.source;
-        console.log(sigRgxSrc);
+        var sigRgxSrc = "(?:" + /\[\[\s*:?\s*/.source + "(" + userspcLinkRgx.both +
+                /([^\]]||\](?!\]))*?/.source + ")" + /\]\]\)?/.source + "(" +
+                /[^\[]|\[(?!\[)|\[\[/.source + "(?!" + userspcLinkRgx.both +
+                "))*?" + DATE_FMT_RGX[mw.config.get( "wgServer" )] +
+                /\s+\(UTC\)|class\s*=\s*"autosigned".+?\(UTC\)<\/small>/.source +
+                ")" + /(\S*([ \t\f]|<!--.*?-->)*(?:\{\{.+?\}\})?(?!\S)|\S+([ \t\f]|<!--.*?-->)*)$/.source;
         var sigRgx = new RegExp( sigRgxSrc, "igm" );
         var matchIdx = 0;
         var match;
         var matchIdxEnd;
         var dstSpnIdx;
 
-        // `this_is_true` is to avoid triggering a JS linter rule
-        var this_is_true = true;
+        console.log(sectionWikitext);
 
         sigMatchLoop:
-        for( ; this_is_true ; matchIdx++ ) {
+        for( ; true ; matchIdx++ ) {
             match = sigRgx.exec( sectionWikitext );
             if( !match ) {
                 console.log("[sigIdxToStrIdx] out of matches");
@@ -1039,7 +1170,7 @@ console.log({
             // Add a signature if one isn't already there
             if( !hasSig( reply ) ) {
                 reply += " " + ( window.replyLinkSigPrefix ?
-                    window.replyLinkSigPrefix : "" ) + SIGNATURE;
+                    window.replyLinkSigPrefix : "" ) + LITERAL_SIGNATURE;
             }
 
             var replyLines = reply.split( "\n" );
@@ -1110,11 +1241,15 @@ console.log({
 
             // Determine the user who wrote the comment, for
             // edit-summary and sanity-check purposes
-            var userRgx = new RegExp( /\[\[\s*:?\s*/.source + sigLinkPfxRgx.replace( /_/g, " " ) + /\s*(.+?)(?:\/.+?)?(?:#.+?)?\s*(?:\|.+?)?\]\]/.source, "g" );
-            var userMatches = sectionWikitext.slice( 0, strIdx )
-                    .match( userRgx );
+            var userRgx = new RegExp( /\[\[\s*:?\s*/.source + userspcLinkRgx.both + /\s*(.+?)(?:\/.+?)?(?:#.+?)?\s*(?:\|.+?)?\]\]/.source, "g" );
+            var userMatches = sectionWikitext.slice( 0, strIdx ).match( userRgx );
             var cmtAuthorWktxt = userRgx.exec(
                     userMatches[userMatches.length - 1] )[1];
+
+            if( cmtAuthorWktxt === "DoNotArchiveUntil" ) {
+                userRgx.lastIndex = 0;
+                cmtAuthorWktxt = userRgx.exec( userMatches[userMatches.length - 2] )[1];
+            }
 
             // Normalize case, because that's what happens during
             // wikitext-to-HTML processing; also underscores to spaces
@@ -1125,9 +1260,9 @@ console.log({
             cmtAuthorWktxt = sanitizeUsername( cmtAuthorWktxt );
             cmtAuthorDom = sanitizeUsername( cmtAuthorDom );
 
-            // Sanity check: is the sig username the same as the DOM one?
-            // We attempt to check sigRedirectMapping in case the naive
-            // check fails
+            // Do a sanity check: is the sig username the same as the
+            // DOM one?  We attempt to check sigRedirectMapping in case
+            // the naive check fails
             if( cmtAuthorWktxt !== cmtAuthorDom &&
                     htmlDecode( cmtAuthorWktxt ) !== cmtAuthorDom &&
                     sigRedirectMapping[ cmtAuthorWktxt ] !== cmtAuthorDom ) {
@@ -1178,7 +1313,7 @@ console.log({
 
             // Send another request, this time to actually edit the
             // page
-            ( new mw.Api() ).postWithToken( "csrf", {
+            api.postWithToken( "csrf", {
                 action: "edit",
                 title: mw.config.get( "wgPageName" ),
                 summary: summary,
@@ -1239,27 +1374,12 @@ console.log({
     function handleWrapperClick ( linkLabel, parent, rplyToXfdNom ) {
         return function ( evt ) {
             $.when( mw.messages.exists( INT_MSG_KEYS[0] ) ? 1 :
-                    ( new mw.Api() ).loadMessages( INT_MSG_KEYS ) ).then( function () {
+                    api.loadMessages( INT_MSG_KEYS ) ).then( function () {
                 var newLink = this;
                 var newLinkWrapper = this.parentNode;
 
-                if( !sigLinkPfxRgx ) {
-                    var nsIdMap = mw.config.get( "wgNamespaceIds" );
-                    var nsRgxFragments = [];
-                    var contribsSecondFrag = ":" + escapeForRegex( mw.messages.get( "mycontris" ) ) + "\\/";
-                    for( var nsName in nsIdMap ) {
-                        if( !nsIdMap.hasOwnProperty( nsName ) ) continue;
-                        switch( nsIdMap[nsName] ) {
-                            case 2:
-                            case 3:
-                                nsRgxFragments.push( escapeForRegex( capFirstLetter( nsName ) ) + "\\s*:" );
-                                break;
-                            case -1:
-                                nsRgxFragments.push( escapeForRegex( capFirstLetter( nsName ) ) + contribsSecondFrag );
-                                break;
-                        }
-                    }
-                    sigLinkPfxRgx = "(?:" + nsRgxFragments.join( "|" ) + ")";
+                if( !userspcLinkRgx ) {
+                    buildUserspcLinkRgx();
                 }
 
                 // Remove previous panel
@@ -1692,9 +1812,15 @@ console.log({
                 .append( $( "<div>" ).attr( "id", "reply-link-buttons" )
                     .append( $( "<button> " ) ) ) );
 
+        mw.util.addCSS( ".reply-link-wrapper { background-color: orange; }" );
+
         // Fetch content, Parsoid DOM, etc
         var parsoidUrl = PARSOID_ENDPOINT + encodeURIComponent( currentPageName );
-        $.get( parsoidUrl ).then( function ( parsoidDomString ) {
+        $.when(
+            $.get( parsoidUrl ),
+            api.loadMessages( INT_MSG_KEYS )
+        ).then( function ( parsoidDomString, _ ) {
+            buildUserspcLinkRgx();
 
             // Statistics variables
             var successes = 0, failures = 0;
@@ -1708,7 +1834,7 @@ console.log({
                     var ourMetadata = metadata[ wrapper.children[0].id ];
                     var findSectionResult = findSection( parsoidDomString, cmtLink );
 
-                    getWikitext( findSectionResult.page ).then( function ( revObj ) {
+                    getWikitext( findSectionResult.page, /* useCaching */ true ).then( function ( revObj ) {
                             doReply( ourMetadata[0], ourMetadata[1], ourMetadata[2],
                                     cmtAuthor, false, revObj, findSectionResult ).done( function () {
                                         wrapper.style.background = "green";
@@ -1733,12 +1859,13 @@ console.log({
                 var wrapper = wrappers.shift();
                 if( wrapper ) {
                     runOneTestOn( wrapper );
-                    setTimeout( runOneTest, 250 );
+                    setTimeout( runOneTest, 750 );
                 } else {
                     var results = successes + " successes, " + failures + " failures";
                     $( "#mw-content-text" ).prepend( results ).append( results );
                 }
             }
+            //console.log = function() {};
             setTimeout( runOneTest, 0 );
         } );
     }
@@ -1749,11 +1876,16 @@ console.log({
         if( mw.config.get( "wgAction" ) === "history" ) return;
         if( document.getElementById( "editform" ) ) return;
 
-        // CSS
+        api = new mw.Api();
+
         mw.util.addCSS(
             "#reply-link-panel { padding: 1em; margin-left: 1.6em; "+
               "max-width: 1200px; width: 66%; margin-top: 0.5em; }"
         );
+
+        // Pre-load interface messages; we will check again when a (reply)
+        // link is clicked
+        api.loadMessages( INT_MSG_KEYS );
 
         // Initialize the xfdType global variable, which must happen
         // before the call to attachLinks
@@ -1812,21 +1944,10 @@ console.log({
 
     }
 
-    var currNamespace = mw.config.get( "wgNamespaceNumber" );
-
-    // Also enable on T:TDYK and its subpages
-    var ttdykPage = mw.config.get( "wgPageName" ).indexOf( TTDYK ) === 0;
-
-    // Normal "read" view and not a diff view
-    var normalView = mw.config.get( "wgIsArticle" ) &&
-            !mw.config.get( "wgDiffOldId" );
-
-    if ( normalView && ( currNamespace % 2 === 1 || currNamespace === 4 || ttdykPage ) ) {
-        mw.loader.load( "mediawiki.ui.input", "text/css" );
-        mw.loader.using( [ "mediawiki.util", "mediawiki.api" ] ).then( function () {
-            mw.hook( "wikipage.content" ).add( onReady );
-        } );
-    }
+    mw.loader.load( "mediawiki.ui.input", "text/css" );
+    mw.loader.using( [ "mediawiki.util", "mediawiki.api" ] ).then( function () {
+        mw.hook( "wikipage.content" ).add( onReady );
+    } );
 
     // Return functions for testing
     return {
@@ -1843,8 +1964,18 @@ if( typeof module === typeof {} ) {
 }
 
 // If we're in the right environment, load the script
-if( ( typeof jQuery !== "undefined" ) &&
-        ( typeof mediaWiki !== "undefined" ) ) {
-    loadReplyLink( jQuery, mediaWiki );
+if( jQuery !== undefined && mediaWiki !== undefined ) {
+    var currNamespace = mw.config.get( "wgNamespaceNumber" );
+
+    // Also enable on T:TDYK and its subpages
+    var ttdykPage = mw.config.get( "wgPageName" ).indexOf( "Template:Did_you_know_nominations" ) === 0;
+
+    // Normal "read" view and not a diff view
+    var normalView = mw.config.get( "wgIsArticle" ) &&
+            !mw.config.get( "wgDiffOldId" );
+
+    if ( normalView && ( currNamespace % 2 === 1 || currNamespace === 4 || ttdykPage ) ) {
+        loadReplyLink( jQuery, mediaWiki );
+    }
 }
 //</nowiki>
