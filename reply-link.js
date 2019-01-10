@@ -1152,12 +1152,6 @@ function loadReplyLink( $, mw ) {
         header = [ "" + findSectionResult.sectionLevel, findSectionResult.sectionName, findSectionResult.sectionIdx ];
         var deferred = $.Deferred();
 
-        // Change UI to make it clear we're performing an operation
-        document.getElementById( "reply-dialog-field" ).style["background-image"] =
-            "url(" + window.replyLinkPendingImageUrl + ")";
-        document.querySelector( "#reply-link-buttons button" ).disabled = true;
-        setStatus( "Loading..." );
-
         var wikitext = revObj.content;
 
         try {
@@ -1515,6 +1509,13 @@ function loadReplyLink( $, mw ) {
 
                 // Called by the "Reply" button and Ctrl-Enter in the text area
                 function startReply() {
+
+                    // Change UI to make it clear we're performing an operation
+                    document.getElementById( "reply-dialog-field" ).style["background-image"] =
+                        "url(" + window.replyLinkPendingImageUrl + ")";
+                    document.querySelector( "#reply-link-buttons button" ).disabled = true;
+                    setStatus( "Loading..." );
+
                     var parsoidUrl = PARSOID_ENDPOINT + encodeURIComponent( currentPageName ),
                         findSectionResultPromise = $.get( parsoidUrl )
                             .then( function ( parsoidDomString ) {
