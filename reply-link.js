@@ -483,7 +483,7 @@ function loadReplyLink( $, mw ) {
             return /dd|li/.test( nodeLcTag ) ||
                     ( ( nodeLcTag === "p" || nodeLcTag === "div" ) &&
                         ( node.parentNode.className === "mw-parser-output" ||
-                            node.parentNode.className === "hover-edit-section"
+                            node.parentNode.className === "hover-edit-section" ||
                             ( node.parentNode.tagName.toLowerCase() === "section" &&
                                 node.parentNode.dataset.mwSectionId ) ) );
         }
