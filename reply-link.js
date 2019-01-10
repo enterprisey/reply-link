@@ -797,10 +797,11 @@ function loadReplyLink( $, mw ) {
             //console.log(infoJson);
             for( var i = 0; i < infoJson.parts.length; i++ ) {
                 if( infoJson.parts[i].template &&
-                        infoJson.parts[i].template.target &&
-                        infoJson.parts[i].template.target.wt &&
-                        infoJson.parts[i].template.target.wt.indexOf( ":" ) >= 0 ) {
-                    targetPage = infoJson.parts[i].template.target.wt;
+                        infoJson.parts[i].template.target ) {
+                    var wtTarget =infoJson.parts[i].template.target.wt;
+                    if( wtTarget && ( wtTarget.indexOf( ":" ) >= 0 || wtTarget.indexOf( "/" ) === 0 ) ) {
+                        targetPage = infoJson.parts[i].template.target.wt;
+                    }
                 }
             }
         }
