@@ -1757,7 +1757,10 @@ function loadReplyLink( $, mw ) {
                 "span" === node.tagName.toLowerCase() &&
                 node.className.indexOf( "localcomments" ) >= 0;
 
-            var isSmall = node.nodeType === 1 && node.tagName.toLowerCase() === "small";
+            var isSmall = node.nodeType === 1 && (
+                    node.tagName.toLowerCase() === "small" ||
+                    ( node.tagName.toLowerCase() === "span" &&
+                    node.style && node.style.getPropertyValue( "font-size" ) === "85%" ) );
 
             // Small nodes are okay, unless they're delsort notices
             var isOkSmallNode = isSmall &&
