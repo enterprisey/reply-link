@@ -230,9 +230,8 @@ function loadReplyLink( $, mw ) {
         // The element itself will be the text span in the h2; its
         // parent will be the h2; and the parent of the h2 is the
         // content container that we want
-        var candidate = document.querySelector( targetHeader + " > span.mw-headline" )
-            .parentElement
-            .parentElement;
+        var candidates = document.querySelectorAll( targetHeader + " > span.mw-headline" );
+        var candidate = candidates[candidates.length-1].parentElement.parentElement;
 
         // Compatibility with User:Enterprisey/hover-edit-section
         // That script puts each section in its own div, so we need to
@@ -562,7 +561,7 @@ function loadReplyLink( $, mw ) {
         /** From a "container elem" (dd, li, or p), remove all but the first comment. */
         function onlyFirstComment( container ) {
             //console.log("onlyFirstComment top container and container.childNodes",container,container.childNodes);
-            if( container.children.length === 1 && container.children[0].tagName.toLowerCase() === "small" ) {
+            if( container.childNodes.length === 1 && container.children[0].tagName.toLowerCase() === "small" ) {
                 console.log( "[onlyFirstComment] container only had a small in it" );
                 container = container.children[0];
             }
@@ -631,9 +630,9 @@ function loadReplyLink( $, mw ) {
             n.parentNode.removeChild( n );
         } );
 
-        //console.log("liveClone",liveClone,liveClone.childNodes);
+        //console.log("(BEFORE) liveClone",liveClone,liveClone.childNodes);
         onlyFirstComment( liveClone );
-        //console.log("liveClone.childNodes",liveClone.childNodes);
+        //console.log("(AFTER) liveClone",liveClone,liveClone.childNodes);
 
         // Process it a bit to make it look a bit more like the Parsoid output
         var liveAutoNumberedLinks = liveClone.querySelectorAll( "a.external.autonumber" );
@@ -651,20 +650,31 @@ function loadReplyLink( $, mw ) {
         var liveTextContent = surrTextContentFromElem( liveClone );
         //console.log("liveTextContent",liveTextContent);
 
-        var selector = livePath.map( function ( node ) {
-            return node.tagName.toLowerCase();
-        } ).join( " " ) + " a[href='" + newHref + "']";
-
-        // TODO: Optimization opportunity - run querySelectorAll only on the
-        // section that we know contains the comment
-        var psdLinks = psdDom.querySelectorAll( selector );
-        //console.log("(",liveDupeLinkIdx, ")",selector, " --> ", psdLinks);
-
         function normalizeTextContent( tc ) {
             return deArmorFrenchSpaces( tc );
         }
 
         liveTextContent = normalizeTextContent( liveTextContent );
+
+        var selector = livePath.map( function ( node ) {
+            return node.tagName.toLowerCase();
+        } ).join( " " ) + " a[href^='" + newHref + "']";
+
+        // TODO: Optimization opportunity - run querySelectorAll only on the
+        // section that we know contains the comment
+        var psdLinks = iterableToList( psdDom.querySelectorAll( selector ) );
+        //console.log("(",liveDupeLinkIdx, ")",selector, " --> ", psdLinks);
+
+        var oldPsdLinks = psdLinks,
+            newHrefLen = newHref.length,
+            hrefSubstr;
+        psdLinks = [];
+        for( var i = 0; i < oldPsdLinks.length; i++ ) {
+            hrefSubstr = oldPsdLinks[i].getAttribute( "href" ).substring( newHrefLen );
+            if( !hrefSubstr || hrefSubstr.indexOf( "#" ) === 0 ) {
+                psdLinks.push( oldPsdLinks[i] );
+            }
+        }
 
         // Narrow down by entire textContent of list element
         var psdCorrLinks = []; // the corresponding link elem(s)
@@ -804,11 +814,71 @@ function loadReplyLink( $, mw ) {
         }
 
         // Finally, get the index of our nearest header
-        var headerIdx = iterableToList( psdDom.querySelectorAll( HEADER_SELECTOR ) )
-                .filter( function ( header ) {
-                    return ( header.getAttribute( "about" ) || null ) === tsclnId;
-                } )
-                .indexOf( nearestHeader );
+        var allHeaders = iterableToList( psdDom.querySelectorAll( HEADER_SELECTOR ) );
+        var headerIdx = null, headerAbout;
+        var tIdx = 0; // "header index for headers inside tsclnId"
+
+        // Note that i is incremented at the end of the loop because
+        // sometimes we want to skip an index, such as when it comes
+        // from another template
+        for( var i = 0; i < allHeaders.length; ) {
+            if( allHeaders[i] === nearestHeader ) {
+                headerIdx = tIdx;
+                break;
+            }
+            headerAbout = allHeaders[i].getAttribute( "about" );
+            if( allHeaders[i].hasAttribute( "about" ) ) {
+                if( headerAbout === tsclnId ) {
+                    tIdx++;
+                }
+                i++;
+                continue;
+            } else {
+                var currNode = allHeaders[i];
+                var container = null, containerAbout = null;
+                while( currNode.tagName.toLowerCase() !== "body" ) {
+                    if( currNode.hasAttribute( "about" ) ) {
+                        container = currNode;
+                        containerAbout = currNode.getAttribute( "about" );
+                        break;
+                    }
+                    currNode = currNode.parentNode;
+                }
+
+                if( container ) {
+
+                    // If the container has any other templates inside it,
+                    // we can't use it, so treat this header normally and move on
+                    if( container.querySelector( "*[about]" ) ) {
+                        if( containerAbout === tsclnId ) {
+                            tIdx++;
+                        }
+                        i++;
+                        continue;
+                    }
+
+                    var containerHeaders = iterableToList( container.querySelectorAll( HEADER_SELECTOR ) );
+                    if( container.contains( nearestHeader ) ) {
+                        headerIdx = tIdx + containerHeaders.indexOf( nearestHeader );
+                        break;
+                    } else {
+                        if( containerAbout === tsclnId ) {
+                            tIdx += containerHeaders.length;
+                        }
+                        i += containerHeaders.length;
+                        continue;
+                    }
+                } else {
+                    if( tsclnId === null ) {
+                        tIdx++;
+                    }
+                    i++;
+                    continue;
+                }
+            }
+            i++;
+        }
+        //console.log("headerIdx ",headerIdx);
 
         var result = {
             page: targetPage,
@@ -829,7 +899,7 @@ function loadReplyLink( $, mw ) {
      * Performs a sanity check with the given section name.
      */
     function getSectionWikitext( wikitext, sectionIdx, sectionName ) {
-        var HEADER_RE = /^\s*==(=*)\s*(.+?)\s*\1==\s*$/gm;
+        var HEADER_RE = /^\s*=(=*)\s*(.+?)\s*\1=\s*$/gm;
 
         //console.log("In getSectionWikitext, sectionIdx = " + sectionIdx + ", sectionName = >" + sectionName + "<");
         //console.log("wikitext (first 1000 chars) is " + dirtyWikitext.substring(0, 1000));
