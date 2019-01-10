@@ -1373,9 +1373,6 @@ function loadReplyLink( $, mw ) {
             }
             var summary = "/* " + sectionHeader + " */ " + summaryCore + ADVERT;
 
-            mw.notify("WAITING FIVE SECONDS");
-            setTimeout(function(){
-
             // Send another request, this time to actually edit the
             // page
             api.postWithToken( "csrf", {
@@ -1428,8 +1425,6 @@ function loadReplyLink( $, mw ) {
                 console.log(result);
                 deferred.reject();
             } );
-
-            }, 5000);
         } catch ( e ) {
             setStatusError( e );
             deferred.reject();
