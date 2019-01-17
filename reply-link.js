@@ -645,6 +645,15 @@ function loadReplyLink( $, mw ) {
             liveSelflinks[i].href = "/wiki/" + currentPageName;
         }
 
+        // "Comments in Local Time" compatibility: the text content is
+        // gonna contain the modified time stamp, but the original time
+        // stamp is still there
+        var localCommentsSpan = liveClone.querySelector( "span.localcomments" );
+        if( localCommentsSpan ) {
+            var dateNode = document.createTextNode( localCommentsSpan.getAttribute( "title" ) );
+            localCommentsSpan.parentNode.replaceChild( dateNode, localCommentsSpan );
+        }
+
         // TODO: Optimization - surrTextContentFromElem does the prefixing
         // operation a second time, even though we already called onlyFirstComment
         // on it.
