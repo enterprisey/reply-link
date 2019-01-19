@@ -231,7 +231,7 @@ function loadReplyLink( $, mw ) {
         // parent will be the h2; and the parent of the h2 is the
         // content container that we want
         var candidates = document.querySelectorAll( targetHeader + " > span.mw-headline" );
-        if( !candidates ) return null;
+        if( !candidates.length ) return null;
         var candidate = candidates[candidates.length-1].parentElement.parentElement;
 
         // Compatibility with User:Enterprisey/hover-edit-section
