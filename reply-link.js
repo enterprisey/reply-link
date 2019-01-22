@@ -11,6 +11,7 @@ function loadReplyLink( $, mw ) {
 
     // T:TDYK, used at the end of loadReplyLink
     var TTDYK = "Template:Did_you_know_nominations";
+    var RFA_PG = "Wikipedia:Requests_for_adminship/";
 
     // Threshold for indentation when we offer to outdent
     var OUTDENT_THRESH = 8;
@@ -224,13 +225,14 @@ function loadReplyLink( $, mw ) {
 
         // Which header are we looking for?
         var targetHeader = "h2";
-        if( xfdType ) targetHeader = "h3";
+        if( xfdType || currentPageName.startsWith( RFA_PG ) ) targetHeader = "h3";
         if( currentPageName.startsWith( TTDYK ) ) targetHeader = "h4";
 
         // The element itself will be the text span in the h2; its
         // parent will be the h2; and the parent of the h2 is the
         // content container that we want
         var candidates = document.querySelectorAll( targetHeader + " > span.mw-headline" );
+        console.log(candidates)
         if( !candidates.length ) return null;
         var candidate = candidates[candidates.length-1].parentElement.parentElement;
 
@@ -658,7 +660,7 @@ function loadReplyLink( $, mw ) {
         // operation a second time, even though we already called onlyFirstComment
         // on it.
         var liveTextContent = surrTextContentFromElem( liveClone );
-        //console.log("liveTextContent",liveTextContent);
+        console.log("liveTextContent",liveTextContent);
 
         function normalizeTextContent( tc ) {
             return deArmorFrenchSpaces( tc );
@@ -673,7 +675,7 @@ function loadReplyLink( $, mw ) {
         // TODO: Optimization opportunity - run querySelectorAll only on the
         // section that we know contains the comment
         var psdLinks = iterableToList( psdDom.querySelectorAll( selector ) );
-        //console.log("(",liveDupeLinkIdx, ")",selector, " --> ", psdLinks);
+        console.log("(",liveDupeLinkIdx, ")",selector, " --> ", psdLinks);
 
         var oldPsdLinks = psdLinks,
             newHrefLen = newHref.length,
@@ -711,7 +713,7 @@ function loadReplyLink( $, mw ) {
                 var psdContainer = ascendToCommentContainer( psdLinks[i], /* live */ false );
                 if( psdContainer.dataset.replyLinkGeCorrCo ) continue;
                 var psdTextContent = normalizeTextContent( surrTextContentFromElem( psdContainer ) );
-                //console.log(psdTextContent);
+                console.log(psdTextContent);
                 if( psdTextContent === liveTextContent ) {
                     var psdDupeLinks = psdContainer.querySelectorAll( "a[href='" + newHref + "']" );
                     psdCorrLinks.push( psdDupeLinks[ liveDupeLinkIdx ] );
@@ -1229,7 +1231,7 @@ function loadReplyLink( $, mw ) {
      * Returns a Deferred that resolves/rejects when the reply succeeds/fails.
      */
     function doReply( indentation, header, sigIdx, cmtAuthorDom, rplyToXfdNom, revObj, findSectionResult ) {
-        //console.log("TOP OF doReply",header,findSectionResult);
+        console.log("TOP OF doReply",header,findSectionResult);
         header = [ "" + findSectionResult.sectionLevel, findSectionResult.sectionName, findSectionResult.sectionIdx ];
         var deferred = $.Deferred();
 
