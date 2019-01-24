@@ -232,7 +232,6 @@ function loadReplyLink( $, mw ) {
         // parent will be the h2; and the parent of the h2 is the
         // content container that we want
         var candidates = document.querySelectorAll( targetHeader + " > span.mw-headline" );
-        console.log(candidates)
         if( !candidates.length ) return null;
         var candidate = candidates[candidates.length-1].parentElement.parentElement;
 
@@ -660,7 +659,7 @@ function loadReplyLink( $, mw ) {
         // operation a second time, even though we already called onlyFirstComment
         // on it.
         var liveTextContent = surrTextContentFromElem( liveClone );
-        console.log("liveTextContent",liveTextContent);
+        console.log("liveTextContent >>>>>"+liveTextContent + "<<<<<");
 
         function normalizeTextContent( tc ) {
             return deArmorFrenchSpaces( tc );
@@ -695,7 +694,7 @@ function loadReplyLink( $, mw ) {
                 var psdContainer = ascendToCommentContainer( psdLinks[i], /* live */ false, true );
                 //console.log("psdContainer",psdContainer);
                 var psdTextContent = normalizeTextContent( surrTextContentFromElem( psdContainer[0] ) );
-                //console.log(i,psdTextContent);
+                console.log(i,">>>"+psdTextContent+"<<<");
                 if( psdTextContent === liveTextContent ) {
                     psdCorrLinks.push( psdLinks[i] );
                 } /* else {
@@ -713,7 +712,7 @@ function loadReplyLink( $, mw ) {
                 var psdContainer = ascendToCommentContainer( psdLinks[i], /* live */ false );
                 if( psdContainer.dataset.replyLinkGeCorrCo ) continue;
                 var psdTextContent = normalizeTextContent( surrTextContentFromElem( psdContainer ) );
-                console.log(psdTextContent);
+                console.log(i,">>>"+psdTextContent+"<<<");
                 if( psdTextContent === liveTextContent ) {
                     var psdDupeLinks = psdContainer.querySelectorAll( "a[href='" + newHref + "']" );
                     psdCorrLinks.push( psdDupeLinks[ liveDupeLinkIdx ] );
@@ -1390,7 +1389,7 @@ function loadReplyLink( $, mw ) {
             // page
             api.postWithToken( "csrf", {
                 action: "edit",
-                title: mw.config.get( "wgPageName" ),
+                title: findSectionResult.page,
                 summary: summary,
                 text: newWikitext,
                 basetimestamp: revObj.timestamp
@@ -1403,19 +1402,29 @@ function loadReplyLink( $, mw ) {
                     window.location.reload( true );
                 };
                 if ( data && data.edit && data.edit.result && data.edit.result == "Success" ) {
+                    var needPurge = findSectionResult.page !== currentPageName;
 
-                    var reloadHtml = window.replyLinkAutoReload ? "automatically reloading"
-                        : "<a href='javascript:window.replyLinkReload()' class='reply-link-reload'>Reload</a>";
-                    setStatus( "Reply saved! (" + reloadHtml + ")" );
+                    function finishReply( _ ) {
+                        var reloadHtml = window.replyLinkAutoReload ? "automatically reloading"
+                            : "<a href='javascript:window.replyLinkReload()' class='reply-link-reload'>Reload</a>";
+                        setStatus( "Reply saved! (" + reloadHtml + ")" );
 
-                    // Required to permit reload to happen, checked in onbeforeunload
-                    replyWasSaved = true;
+                        // Required to permit reload to happen, checked in onbeforeunload
+                        replyWasSaved = true;
 
-                    if( window.replyLinkAutoReload ) {
-                        window.replyLinkReload();
+                        if( window.replyLinkAutoReload ) {
+                            window.replyLinkReload();
+                        }
+
+                        deferred.resolve();
                     }
 
-                    deferred.resolve();
+                    if( needPurge ) {
+                        setStatus( "Reply saved! Purging..." );
+                        api.post( { action: "purge", titles: currentPageName } ).done( finishReply );
+                    } else {
+                        finishReply();
+                    }
                 } else {
                     if( data && data.edit && data.edit.spamblacklist ) {
                         setStatus( "Error! Your post contained a link on the <a href=" +
