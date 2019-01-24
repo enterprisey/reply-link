@@ -1723,7 +1723,7 @@ function loadReplyLink( $, mw ) {
         newLink.dataset.originalLabel = linkLabel;
         newLink.appendChild( document.createTextNode( linkLabel ) );
         newLink.addEventListener( "click", handleWrapperClick( linkLabel, parent, rplyToXfdNom ) );
-        newLinkWrapper.appendChild( document.createTextNode( "(" ) );
+        newLinkWrapper.appendChild( document.createTextNode( " (" ) );
         newLinkWrapper.appendChild( newLink );
         newLinkWrapper.appendChild( document.createTextNode( ")" ) );
 
@@ -1981,8 +1981,7 @@ function loadReplyLink( $, mw ) {
         mw.util.addCSS(
             "#reply-link-panel { padding: 1em; margin-left: 1.6em; "+
               "max-width: 1200px; width: 66%; margin-top: 0.5em; }"+
-            ".gone-on-empty:empty { display: none; }"+
-            ".reply-link-wrapper { margin-left: 0.3em }"
+            ".gone-on-empty:empty { display: none; }"
         );
 
         // Pre-load interface messages; we will check again when a (reply)
