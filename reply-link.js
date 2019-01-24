@@ -2006,7 +2006,7 @@ function loadReplyLink( $, mw ) {
             }
         }
 
-        // Default value for some preferences
+        // Default values for some preferences
         if( window.replyLinkAutoReload === undefined ) {
             window.replyLinkAutoReload = true;
         }
