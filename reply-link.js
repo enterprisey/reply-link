@@ -516,6 +516,8 @@ function loadReplyLink( $, mw ) {
      * psd = Parsoid, live = in the current, live page DOM.
      */
     function getCorrCmt( psdDom, sigLinkElem ) {
+
+        // First, define some helper functions
         
         // Does this node have a timestamp in it?
         function hasTimestamp( node ) {
@@ -591,8 +593,14 @@ function loadReplyLink( $, mw ) {
             }
         }
 
+        // End helper functions, begin actual code
+
+        // We dump this object for debugging in the event of an error
+        var corrCmtDebug = {};
+
         // Convert live href to psd href
         var newHref, liveHref = decodeURIComponent( sigLinkElem.getAttribute( "href" ) );
+        corrCmtDebug.liveHref = liveHref;
         if( sigLinkElem.className.indexOf( "mw-selflink" ) >= 0 ) {
             newHref = "./" + currentPageName; 
         } else {
@@ -604,14 +612,15 @@ function loadReplyLink( $, mw ) {
                         encodeURIComponent( hrefTokens[1] )
                             .replace( /^Contributions%2F/, "Contributions/" )
                             .replace( /%2F/g, "/" )
-                            .replace( /%23/g, "#" );
+                            .replace( /%23/g, "#" )
+                            .replace( /%2C/g, "," );
             } else {
                 var REDLINK_HREF_RGX = /^\/w\/index\.php\?title=(.+?)&action=edit&redlink=1$/;
                 newHref = "./" + REDLINK_HREF_RGX.exec( liveHref )[1];
             }
         }
         var livePath = ascendToCommentContainer( sigLinkElem, /* live */ true, /* recordPath */ true );
-        //console.log("livePath",livePath)
+        corrCmtDebug.newHref = newHref; corrCmtDebug.livePath = livePath;
 
         // Deal with the case where the comment has multiple links to
         // sigLinkElem's href; we will store the index of the link we want.
@@ -694,7 +703,7 @@ function loadReplyLink( $, mw ) {
                 var psdContainer = ascendToCommentContainer( psdLinks[i], /* live */ false, true );
                 //console.log("psdContainer",psdContainer);
                 var psdTextContent = normalizeTextContent( surrTextContentFromElem( psdContainer[0] ) );
-                console.log(i,">>>"+psdTextContent+"<<<");
+                //console.log(i,">>>"+psdTextContent+"<<<");
                 if( psdTextContent === liveTextContent ) {
                     psdCorrLinks.push( psdLinks[i] );
                 } /* else {
@@ -841,6 +850,7 @@ function loadReplyLink( $, mw ) {
             headerAbout = allHeaders[i].getAttribute( "about" );
             if( allHeaders[i].hasAttribute( "about" ) ) {
                 if( headerAbout === tsclnId ) {
+                    console.log("tIdx=",tIdx,allHeaders[i].textContent);
                     tIdx++;
                 }
                 i++;
@@ -863,6 +873,7 @@ function loadReplyLink( $, mw ) {
                     // we can't use it, so treat this header normally and move on
                     if( container.querySelector( "*[about]" ) ) {
                         if( containerAbout === tsclnId ) {
+                            console.log("2/tIdx=",tIdx,allHeaders[i].textContent);
                             tIdx++;
                         }
                         i++;
@@ -875,6 +886,7 @@ function loadReplyLink( $, mw ) {
                         break;
                     } else {
                         if( containerAbout === tsclnId ) {
+                            console.log("multijump by "+containerHeaders.length," now " + tIdx + containerHeaders.length);
                             tIdx += containerHeaders.length;
                         }
                         i += containerHeaders.length;
@@ -882,6 +894,7 @@ function loadReplyLink( $, mw ) {
                     }
                 } else {
                     if( tsclnId === null ) {
+                        //console.log("tIdx=",tIdx,allHeaders[i].textContent);
                         tIdx++;
                     }
                     i++;
@@ -913,7 +926,7 @@ function loadReplyLink( $, mw ) {
     function getSectionWikitext( wikitext, sectionIdx, sectionName ) {
         var HEADER_RE = /^\s*=(=*)\s*(.+?)\s*\1=\s*$/gm;
 
-        //console.log("In getSectionWikitext, sectionIdx = " + sectionIdx + ", sectionName = >" + sectionName + "<");
+        console.log("In getSectionWikitext, sectionIdx = " + sectionIdx + ", sectionName = >" + sectionName + "<");
         //console.log("wikitext (first 1000 chars) is " + dirtyWikitext.substring(0, 1000));
 
         // There are certain locations where a header may appear in the
@@ -959,7 +972,7 @@ function loadReplyLink( $, mw ) {
                         if ( headerMatch.index + headerMatch[0].length <=
                             ignoreSpanStarts[igIdx] + ignoreSpanLengths[igIdx] ) {
 
-                            //console.log("(IGNORED, igIdx="+igIdx+") Header " + headerCounter + " (idx " + headerMatch.index + "): >" + headerMatch[0].trim() + "<");
+                            console.log("(IGNORED, igIdx="+igIdx+") Header " + headerCounter + " (idx " + headerMatch.index + "): >" + headerMatch[0].trim() + "<");
 
                             // Invalid header
                             continue headerMatchLoop;
@@ -1018,7 +1031,7 @@ function loadReplyLink( $, mw ) {
      * Returns -1 if we couldn't find anything.
      */
     function sigIdxToStrIdx( sectionWikitext, sigIdx ) {
-        //console.log( "In sigIdxToStrIdx, sigIdx = " + sigIdx );
+        console.log( "In sigIdxToStrIdx, sigIdx = " + sigIdx );
 
         // There are certain regions that we skip while attaching links:
         //
@@ -1081,7 +1094,7 @@ function loadReplyLink( $, mw ) {
                 console.error("[sigIdxToStrIdx] out of matches");
                 return -1;
             }
-            //console.log( "sig match (matchIdx = " + matchIdx + ") is >" + match[0] + "< (index = " + match.index + ")" );
+            console.log( "sig match (matchIdx = " + matchIdx + ") is >" + match[0] + "< (index = " + match.index + ")" );
 
             matchIdxEnd = match.index + match[0].length;
 
@@ -1809,16 +1822,17 @@ function loadReplyLink( $, mw ) {
                     // Update global metadata dictionary
                     metadata[linkId] = currIndentation;
                 }
-            } else if( /^(div|p|dl|dd|ul|li|span|ol)$/.test( node.tagName.toLowerCase() ) ) {
+            } else if( /^(div|p|dl|dd|ul|li|span|ol|table|tbody|tr|td)$/.test( node.tagName.toLowerCase() ) ) {
                 switch( node.tagName.toLowerCase() ) {
                 case "dl": newIndentSymbol = ":"; break;
                 case "ul": newIndentSymbol = "*"; break;
                 case "ol": newIndentSymbol = "#"; break;
-                //case "div":
-                //    if( node.className !== "hover-edit-section" ) {
-                //        continue;
-                //    }
-                //    break;
+                case "table":
+                    console.log(node);
+                    if( node.className.indexOf( "mw-collapsible" ) < 0 ) {
+                        continue;
+                    }
+                    break;
                 default: newIndentSymbol = ""; break;
                 }
 
