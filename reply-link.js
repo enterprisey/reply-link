@@ -1828,7 +1828,6 @@ function loadReplyLink( $, mw ) {
                 case "ul": newIndentSymbol = "*"; break;
                 case "ol": newIndentSymbol = "#"; break;
                 case "table":
-                    console.log(node);
                     if( node.className.indexOf( "mw-collapsible" ) < 0 ) {
                         continue;
                     }
