@@ -799,18 +799,39 @@ function loadReplyLink( $, mw ) {
         //console.log( "tsclnId", tsclnId );
 
         // Now, get the nearest header above us
+        function inPseudo( headerElement ) {
+            var currNodeIP = headerElement;
+            // This requires Parsoid HTML v 2.0.0
+            do {
+                if( currNodeIP.nodeType === 1 && currNodeIP.matches( "section" ) ) {
+                    return currNodeIP.dataset.mwSectionId < 0;
+                    break;
+                }
+                currNodeIP = currNodeIP.parentNode;
+            } while( currNodeIP );
+            return false;
+        }
+
         var currNode = corrCmt;
         var nearestHeader = null;
         var HTML_HEADER_RGX = /^h\d$/;
         do {
             if( HTML_HEADER_RGX.exec( currNode.tagName.toLowerCase() ) ) {
-                nearestHeader = currNode;
-                break;
+                if( !inPseudo( currNode ) ) {
+                    nearestHeader = currNode;
+                    break;
+                }
             }
             var containedHeaders = currNode.querySelectorAll( HEADER_SELECTOR );
             if( containedHeaders.length ) {
-                nearestHeader = containedHeaders[ containedHeaders.length - 1 ];
-                break;
+                var nearestHdrIdx = containedHeaders.length - 1;
+                while( nearestHdrIdx >= 0 && inPseudo( containedHeaders[ nearestHdrIdx ] ) ) {
+                    nearestHdrIdx--;
+                }
+                if( nearestHdrIdx >= 0 ) {
+                    nearestHeader = containedHeaders[ nearestHdrIdx ];
+                    break;
+                }
             }
             if( currNode.previousElementSibling ) {
                 currNode = currNode.previousElementSibling;
