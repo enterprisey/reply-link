@@ -1753,7 +1753,7 @@ function loadReplyLink( $, mw ) {
         if( !mainContent ) return;
         var contentEls = mainContent.children;
 
-        // Loop until we get a header
+        // Find the index of the first header in contentEls
         var headerIndex = 0;
         for( headerIndex = 0; headerIndex < contentEls.length; headerIndex++ ) {
             if( contentEls[ headerIndex ].tagName.toLowerCase().startsWith( "h" ) ) break;
@@ -1761,7 +1761,9 @@ function loadReplyLink( $, mw ) {
 
         // If we didn't find any headers at all, that's a problem and we
         // should bail
-        if( headerIndex === contentEls.length ) {
+        if( mainContent.querySelector( "div.hover-edit-section" ) ) {
+            headerIndex = 0;
+        } else if( headerIndex === contentEls.length ) {
             console.error( "Didn't find any headers - hit end of loop!" );
             return;
         }
@@ -1822,7 +1824,8 @@ function loadReplyLink( $, mw ) {
                     // Update global metadata dictionary
                     metadata[linkId] = currIndentation;
                 }
-            } else if( /^(div|p|dl|dd|ul|li|span|ol|table|tbody|tr|td)$/.test( node.tagName.toLowerCase() ) ) {
+            } else if( node.nodeType === 1 &&
+                    /^(div|p|dl|dd|ul|li|span|ol|table|tbody|tr|td)$/.test( node.tagName.toLowerCase() ) ) {
                 switch( node.tagName.toLowerCase() ) {
                 case "dl": newIndentSymbol = ":"; break;
                 case "ul": newIndentSymbol = "*"; break;
