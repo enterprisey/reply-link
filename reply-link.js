@@ -136,10 +136,17 @@ function loadReplyLink( $, mw ) {
     }
 
     /**
+     * Namespace name ("Template") to ID (10).
+     */
+    function nsNameToId( nsName ) {
+        return mw.config.get( "wgNamespaceIds" )[ nsName.toLowerCase().replace( / /g, "_" ) ];
+    }
+
+    /**
      * Canonical-ize a namespace.
      */
     function canonicalizeNs( ns ) {
-        return fmtNs( mw.config.get( "wgNamespaceIds" )[ ns.toLowerCase().replace( / /g, "_" ) ] );
+        return fmtNs( nsNameToId( ns ) );
     }
 
     /**
@@ -160,6 +167,18 @@ function loadReplyLink( $, mw ) {
         var el = document.createElement( "span" );
         el.innerHTML = html;
         return el.childNodes[0].nodeValue;
+    }
+
+    /**
+     * Process HTML character entities.
+     * From https://stackoverflow.com/a/46851765
+     */
+    function processCharEntities( text ) {
+        var el = document.createElement('div');
+        return text.replace( /\&[#0-9a-z]+;/gi, function ( enc ) {
+            el.innerHTML = enc;
+            return el.innerText
+        } );
     }
 
     /**
@@ -186,19 +205,10 @@ function loadReplyLink( $, mw ) {
         if( e.message ) {
             console.log( "Content request error: " + JSON.stringify( e.message ) );
         }
+        console.log( "DEBUG INFORMATION: '"+currentPageName+"' @ " +
+                mw.config.get( "wgCurRevisionId" ),"parsoid",PARSOID_ENDPOINT+
+                encodeURIComponent(currentPageName).replace(/'/g,"%27")+"/"+mw.config.get("wgCurRevisionId") );
         throw e;
-    }
-
-    /**
-     * Process HTML character entities.
-     * From https://stackoverflow.com/a/46851765
-     */
-    function processCharEntities( text ) {
-        var el = document.createElement('div');
-        return text.replace( /\&[#0-9a-z]+;/gi, function ( enc ) {
-            el.innerHTML = enc;
-            return el.innerText
-        } );
     }
 
     /**
@@ -850,7 +860,6 @@ function loadReplyLink( $, mw ) {
             headerAbout = allHeaders[i].getAttribute( "about" );
             if( allHeaders[i].hasAttribute( "about" ) ) {
                 if( headerAbout === tsclnId ) {
-                    console.log("tIdx=",tIdx,allHeaders[i].textContent);
                     tIdx++;
                 }
                 i++;
@@ -868,12 +877,34 @@ function loadReplyLink( $, mw ) {
                 }
 
                 if( container ) {
+                    function hasDiscussionPage( dataMw ) {
+                        dataMw = JSON.parse( dataMw );
+                        if( dataMw.parts && dataMw.parts.length ) {
+                            return dataMw.parts.some( function ( part ) {
+                                if( part.template && part.template.target && part.template.target.href ) {
+                                    var href = part.template.target.href,
+                                        nsName = ( href.indexOf( ":" ) < 0 ) ? "" : href.substring( 2, href.indexOf( ":" ) ),
+                                        nsId = nsNameToId( nsName );
+                                    if( nsId === 10 ) {
+                                        return part.template.target.href.indexOf( "./Template:Did you know nominations" ) === 0;
+                                    } else {
+                                        return nsId % 2 === 1;
+                                    }
+                                }
+                            } );
+                        }
+                        return false;
+                    }
 
-                    // If the container has any other templates inside it,
+                    // If the container has any other transcluded non-templates inside it,
                     // we can't use it, so treat this header normally and move on
-                    if( container.querySelector( "*[about]" ) ) {
-                        if( containerAbout === tsclnId ) {
-                            console.log("2/tIdx=",tIdx,allHeaders[i].textContent);
+                    var innerTransclusions = container.querySelectorAll( "*[typeof='mw:Transclusion']" );
+                    if( innerTransclusions.length ) {
+                        var transcludesNonTemplate = iterableToList(
+                                innerTransclusions ).any( function ( transclusion ) {
+                                    return hasDiscussionPage( transclusion.dataset.mw );
+                                } );
+                        if( !transcludesNonTemplate && containerAbout === tsclnId ) {
                             tIdx++;
                         }
                         i++;
@@ -885,8 +916,8 @@ function loadReplyLink( $, mw ) {
                         headerIdx = tIdx + containerHeaders.indexOf( nearestHeader );
                         break;
                     } else {
-                        if( containerAbout === tsclnId ) {
-                            console.log("multijump by "+containerHeaders.length," now " + tIdx + containerHeaders.length);
+                        if( containerAbout === tsclnId ||
+                                ( tsclnId === null && container.dataset.mw && !hasDiscussionPage( container.dataset.mw ) ) ) {
                             tIdx += containerHeaders.length;
                         }
                         i += containerHeaders.length;
@@ -894,7 +925,6 @@ function loadReplyLink( $, mw ) {
                     }
                 } else {
                     if( tsclnId === null ) {
-                        //console.log("tIdx=",tIdx,allHeaders[i].textContent);
                         tIdx++;
                     }
                     i++;
@@ -1094,7 +1124,7 @@ function loadReplyLink( $, mw ) {
                 console.error("[sigIdxToStrIdx] out of matches");
                 return -1;
             }
-            console.log( "sig match (matchIdx = " + matchIdx + ") is >" + match[0] + "< (index = " + match.index + ")" );
+            //console.log( "sig match (matchIdx = " + matchIdx + ") is >" + match[0] + "< (index = " + match.index + ")" );
 
             matchIdxEnd = match.index + match[0].length;
 
@@ -1678,6 +1708,10 @@ function loadReplyLink( $, mw ) {
                         newLink.textContent = linkLabel;
                         panelEl.remove();
                     } );
+
+                if( window.replyLinkTestInstantReply ) {
+                    startReply();
+                }
             }.bind( this ) );
 
             // Cancel default event handler
@@ -2023,29 +2057,13 @@ function loadReplyLink( $, mw ) {
         }
 
         // Default values for some preferences
-        if( window.replyLinkAutoReload === undefined ) {
-            window.replyLinkAutoReload = true;
-        }
-
-        if( window.replyLinkDryRun === undefined ) {
-            window.replyLinkDryRun = "never";
-        }
-
-        if( window.replyLinkPreloadPing === undefined ) {
-            window.replyLinkPreloadPing = "always";
-        }
-
-        if( window.replyLinkPreloadPingTpl === undefined ) {
-            window.replyLinkPreloadPingTpl = "{{u|##}}, ";
-        }
-
-        if( window.replyLinkCustomSummary === undefined ) {
-            window.replyLinkCustomSummary = false;
-        }
-
-        if( window.replyLinkTestMode === undefined ) {
-            window.replyLinkTestMode = false;
-        }
+        if( window.replyLinkAutoReload === undefined ) window.replyLinkAutoReload = true;
+        if( window.replyLinkDryRun === undefined ) window.replyLinkDryRun = "never";
+        if( window.replyLinkPreloadPing === undefined ) window.replyLinkPreloadPing = "always";
+        if( window.replyLinkPreloadPingTpl === undefined ) window.replyLinkPreloadPingTpl = "{{u|##}}, ";
+        if( window.replyLinkCustomSummary === undefined ) window.replyLinkCustomSummary = false;
+        if( window.replyLinkTestMode === undefined ) window.replyLinkTestMode = false;
+        if( window.replyLinkTestInstantReply === undefined) window.replyLinkTestInstantReply = false;
 
         // Insert "reply" links into DOM
         attachLinks();
