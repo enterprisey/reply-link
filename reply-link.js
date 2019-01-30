@@ -624,6 +624,8 @@ function loadReplyLink( $, mw ) {
                             .replace( /^Contributions%2F/, "Contributions/" )
                             .replace( /%2F/g, "/" )
                             .replace( /%23/g, "#" )
+                            .replace( /%26/g, "&" )
+                            .replace( /%3D/g, "=" )
                             .replace( /%2C/g, "," );
             } else {
                 var REDLINK_HREF_RGX = /^\/w\/index\.php\?title=(.+?)&action=edit&redlink=1$/;
