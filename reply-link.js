@@ -1661,7 +1661,8 @@ function loadReplyLink( $, mw ) {
                     }
                 };
 
-                // Called by the "Reply" button and Ctrl-Enter in the text area
+                // Called by the "Reply" button, Ctrl-Enter in the text area, and
+                // Enter/Ctrl-Enter in the summary field
                 function startReply() {
 
                     // Change UI to make it clear we're performing an operation
@@ -1732,6 +1733,16 @@ function loadReplyLink( $, mw ) {
                         newLink.textContent = linkLabel;
                         panelEl.remove();
                     } );
+
+                // Event listeners for the custom edit summary field
+                if( window.replyLinkCustomSummary ) {
+                    document.getElementById( "reply-link-summary" )
+                        .addEventListener( "keydown", function ( e ) {
+                            if( e.keyCode == 10 || e.keyCode == 13 ) {
+                                startReply();
+                            }
+                        } );
+                }
 
                 if( window.replyLinkTestInstantReply ) {
                     startReply();
