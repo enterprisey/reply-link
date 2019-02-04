@@ -1090,7 +1090,7 @@ function loadReplyLink( $, mw ) {
         // There are certain regions that we skip while attaching links:
         //
         //  - Spans with the class delsort-notice
-        //  - Divs with the class xfd-relist
+        //  - Divs with the class xfd-relist (and other divs)
         //
         // So, we grab the corresponding wikitext regions with regexes,
         // and store each region's start index in spanStartIndices, and
@@ -1979,7 +1979,11 @@ function loadReplyLink( $, mw ) {
         //console.log(metadata);
 
         // Disable links inside hatnotes, archived discussions
-        var insideArchived = mainContent.querySelectorAll( "div.archived .reply-link-wrapper,div.resolved .reply-link-wrapper" );
+        var badRegionsSelector = [
+            "div.archived",
+            "div.resolved"
+            ].map( function ( s ) { return s + " .reply-link-wrapper" } ).join( "," );
+        var insideArchived = mainContent.querySelectorAll( badRegionsSelector );
         for( var i = 0; i < insideArchived.length; i++ ) {
             insideArchived[i].parentNode.removeChild( insideArchived[i] );
         }
