@@ -2099,7 +2099,7 @@ function loadReplyLink( $, mw ) {
         if( window.replyLinkAutoReload === undefined ) window.replyLinkAutoReload = true;
         if( window.replyLinkDryRun === undefined ) window.replyLinkDryRun = "never";
         if( window.replyLinkPreloadPing === undefined ) window.replyLinkPreloadPing = "always";
-        if( window.replyLinkPreloadPingTpl === undefined ) window.replyLinkPreloadPingTpl = "{{u|##}}, ";
+        if( window.replyLinkPreloadPingTpl === undefined ) window.replyLinkPreloadPingTpl = "{{reply to|##}} ";
         if( window.replyLinkCustomSummary === undefined ) window.replyLinkCustomSummary = false;
         if( window.replyLinkTestMode === undefined ) window.replyLinkTestMode = false;
         if( window.replyLinkTestInstantReply === undefined) window.replyLinkTestInstantReply = false;
