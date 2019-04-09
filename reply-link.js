@@ -5,7 +5,7 @@ function loadReplyLink( $, mw ) {
     var EDIT_REQ_REGEX = /^((Semi|Template|Extended-confirmed)-p|P)rotected edit request on \d\d? \w+ \d{4}/;
     var EDIT_REQ_TPL_REGEX = /\{\{edit (template|fully|extended|semi)-protected\s*(\|.+?)*\}\}/;
     var LITERAL_SIGNATURE = "~~" + "~~"; // split up because it might get processed
-    var ADVERT = " ([[w:en:User:Enterprisey/reply-link|reply-link]])";
+    var ADVERT = " (using [[w:en:User:Enterprisey/reply-link|reply-link]])";
     var PARSOID_ENDPOINT = "https:" + mw.config.get( "wgServer" ) + "/api/rest_v1/page/html/";
     var HEADER_SELECTOR = "h1,h2,h3,h4,h5,h6";
 
