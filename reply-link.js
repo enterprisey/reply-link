@@ -1764,7 +1764,7 @@ function loadReplyLink( $, mw ) {
 
         // Determine whether we're replying to an XfD nom
         var rplyToXfdNom = false;
-        if( xfdType === "AfD" || xfdType === "MfD" ) {
+        if( xfdType === "AfD" || xfdType === "MfD" || xfdType === "DRV" || xfdType === "MRV" ) {
 
             // If the comment is non-indented, we are replying to a nom
             rplyToXfdNom = !anyIndentation;
@@ -2084,6 +2084,10 @@ function loadReplyLink( $, mw ) {
                 xfdType = "CfD";
             } else if( currentPageName.startsWith( "Wikipedia:Files_for_discussion/" ) ) {
                 xfdType = "FfD";
+            } else if ( currentPageName.startsWith( "Wikipedia:Deletion_review/" ) ) {
+                xfdType = "DRV";
+            } else if ( currentPageName.startsWith( "Wikipedia:Move_review/" ) ) {
+                xfdType = "MRV";
             }
         }
 
