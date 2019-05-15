@@ -1441,10 +1441,8 @@ function loadReplyLink( $, mw ) {
                     sectionWikitext );
 
             // Build summary
-            var defaultSummmary = "Replying to " +
-                ( rplyToXfdNom ? xfdType + " nomination by " : "" ) +
-                cmtAuthorWktxt +
-                ( markedEditReq ? " and marking edit request as answered" : "" );
+            var defaultSummmary = rplyToXfdNom ? ( "Commenting in " + xfdType + " nomination" ) :
+                    ( "Replying to " + cmtAuthorWktxt + ( markedEditReq ? " and marking edit request as answered" : "" ) );
             var customSummaryField = document.getElementById( "reply-link-summary" );
             var summaryCore = defaultSummmary;
             if( window.replyLinkCustomSummary && customSummaryField.value ) {
@@ -1788,7 +1786,7 @@ function loadReplyLink( $, mw ) {
         }
 
         // Choose link label: if we're replying to an XfD, customize it
-        var linkLabel = "reply" + ( rplyToXfdNom ? " to " + xfdType : "" );
+        var linkLabel = rplyToXfdNom ? "comment in " + xfdType : "reply" ;
 
         // Construct new link
         var newLinkWrapper = document.createElement( "span" );
