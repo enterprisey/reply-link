@@ -421,7 +421,7 @@ function loadReplyLink( $, mw ) {
                     var rawUsername = usernameMatch[1] ? usernameMatch[1] : usernameMatch[2];
                     return {
                         username: decodeURIComponent( rawUsername ).replace( /_/g, " " ),
-                        link: link 
+                        link: link
                     };
                 }
             }
@@ -529,7 +529,7 @@ function loadReplyLink( $, mw ) {
     function getCorrCmt( psdDom, sigLinkElem ) {
 
         // First, define some helper functions
-        
+
         // Does this node have a timestamp in it?
         function hasTimestamp( node ) {
             //console.log ("hasTimestamp ",node, node.nodeType === 3,node.textContent.trim(),
@@ -613,7 +613,7 @@ function loadReplyLink( $, mw ) {
         var newHref, liveHref = decodeURIComponent( sigLinkElem.getAttribute( "href" ) );
         corrCmtDebug.liveHref = liveHref;
         if( sigLinkElem.className.indexOf( "mw-selflink" ) >= 0 ) {
-            newHref = "./" + currentPageName; 
+            newHref = "./" + currentPageName;
         } else {
             if( /^\/wiki/.test( liveHref ) ) {
                 var hrefTokens = liveHref.split( ":" );
@@ -647,7 +647,7 @@ function loadReplyLink( $, mw ) {
 
         //console.log("livePath[0]",livePath[0],livePath[0].childNodes);
         var liveClone = livePath[0].cloneNode( /* deep */ true );
-        
+
         // Remove our own UI elements
         var ourUiSelector = ".reply-link-wrapper,#reply-link-panel";
         iterableToList( liveClone.querySelectorAll( ourUiSelector ) ).forEach( function ( n ) {
@@ -1635,20 +1635,14 @@ function loadReplyLink( $, mw ) {
                     newOption( "reply-link-option-outdent", "Outdent?", false );
                 }
 
-                /* Commented out because I could never get it to work
                 // Autofill with a recommendation if we're replying to a nom
                 if( rplyToXfdNom ) {
-                    replyDialogField.value = "'''Comment'''";
+                    replyDialogField.value = "'''Comment''' ";
 
                     // Highlight the "Comment" part so the user can change it
-                    var range = document.createRange();
-                    range.selectNodeContents( replyDialogField );
-                    //range.setStart( replyDialogField, 3 ); // start of "Comment"
-                    //range.setEnd( replyDialogField, 10 ); // end of "Comment"
-                    var sel = window.getSelection();
-                    sel.removeAllRanges();
-                    sel.addRange( range );
-                }*/
+                    replyDialogField.setSelectionRange(3,10);
+                    replyDialogField.focus();
+                }
 
                 // Close handler
                 window.onbeforeunload = function ( e ) {
