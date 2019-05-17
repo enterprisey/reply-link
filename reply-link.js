@@ -421,7 +421,7 @@ function loadReplyLink( $, mw ) {
                     var rawUsername = usernameMatch[1] ? usernameMatch[1] : usernameMatch[2];
                     return {
                         username: decodeURIComponent( rawUsername ).replace( /_/g, " " ),
-                        link: link 
+                        link: link
                     };
                 }
             }
@@ -529,7 +529,7 @@ function loadReplyLink( $, mw ) {
     function getCorrCmt( psdDom, sigLinkElem ) {
 
         // First, define some helper functions
-        
+
         // Does this node have a timestamp in it?
         function hasTimestamp( node ) {
             //console.log ("hasTimestamp ",node, node.nodeType === 3,node.textContent.trim(),
@@ -613,7 +613,7 @@ function loadReplyLink( $, mw ) {
         var newHref, liveHref = decodeURIComponent( sigLinkElem.getAttribute( "href" ) );
         corrCmtDebug.liveHref = liveHref;
         if( sigLinkElem.className.indexOf( "mw-selflink" ) >= 0 ) {
-            newHref = "./" + currentPageName; 
+            newHref = "./" + currentPageName;
         } else {
             if( /^\/wiki/.test( liveHref ) ) {
                 var hrefTokens = liveHref.split( ":" );
@@ -647,7 +647,7 @@ function loadReplyLink( $, mw ) {
 
         //console.log("livePath[0]",livePath[0],livePath[0].childNodes);
         var liveClone = livePath[0].cloneNode( /* deep */ true );
-        
+
         // Remove our own UI elements
         var ourUiSelector = ".reply-link-wrapper,#reply-link-panel";
         iterableToList( liveClone.querySelectorAll( ourUiSelector ) ).forEach( function ( n ) {
@@ -1704,17 +1704,25 @@ function loadReplyLink( $, mw ) {
                 // Event listener for the "Preview" button
                 document.getElementById( "reply-link-preview-button" )
                     .addEventListener( "click", function () {
-                        var sanitizedCode = encodeURIComponent( document.getElementById( "reply-dialog-field" ).value );
-                        $.post( "https:" + mw.config.get( "wgServer" ) +
-                            "/api/rest_v1/transform/wikitext/to/html/" + encodeURIComponent( currentPageName ),
-                            "wikitext=" + sanitizedCode + "&body_only=true",
-                            function ( html ) {
-                                document.getElementById( "reply-link-preview" ).innerHTML = html;
+                        var reply = document.getElementById( "reply-dialog-field" ).value.trim();
 
-                                // The hrefs in the wikilinks are all given locally for some reason
-                                var links = document.querySelectorAll( "#reply-link-preview a[rel='mw:WikiLink']" );
+                        // Add a signature if one isn't already there
+                        if( !hasSig( reply ) ) {
+                            reply += " " + ( window.replyLinkSigPrefix ?
+                                window.replyLinkSigPrefix : "" ) + LITERAL_SIGNATURE;
+                        }
+
+                        var sanitizedCode = encodeURIComponent( reply );
+                        $.post( "https:" + mw.config.get( "wgServer" ) +
+                            "/w/api.php?action=parse&format=json&title=" + currentPageName + "&text=" + sanitizedCode
+                                + "&pst=1",
+                            function ( res ) {
+                                if ( !res || !res.parse || !res.parse.text ) return console.log( "Preview failed" );
+                                document.getElementById( "reply-link-preview" ).innerHTML = res.parse.text['*'];
+                                // Add target="_blank" to links to make them open in a new tab by default
+                                var links = document.querySelectorAll( "#reply-link-preview a" );
                                 for( var i = 0, n = links.length; i < n; i++ ) {
-                                    links[i].href = mw.util.getUrl( links[i].getAttribute("href").replace( /^\.\//, "" ) );
+                                    links[i].setAttribute( "target", "_blank" );
                                 }
                             } );
                     } );
