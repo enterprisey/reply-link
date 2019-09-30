@@ -1314,8 +1314,9 @@ function loadReplyLink( $, mw ) {
                     window.replyLinkSigPrefix : "" ) + LITERAL_SIGNATURE;
             }
 
-            var isUsingCustomIndentation = window.replyLinkCustomIndentation === "always" ||
-                !document.getElementById( "reply-link-option-custom-indent" ).checked;
+            var isUsingCustomIndentation = window.replyLinkCustomIndentation === "checkbox"
+                ? document.getElementById( "reply-link-option-custom-indent" ).checked
+                : window.replyLinkCustomIndentation === "always";
             if( !isUsingCustomIndentation ) {
 
                 var replyLines = reply.split( "\n" );
