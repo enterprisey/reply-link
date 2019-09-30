@@ -1314,37 +1314,44 @@ function loadReplyLink( $, mw ) {
                     window.replyLinkSigPrefix : "" ) + LITERAL_SIGNATURE;
             }
 
-            var replyLines = reply.split( "\n" );
+            var isUsingCustomIndentation = window.replyLinkCustomIndentation === "always" ||
+                !document.getElementById( "reply-link-option-custom-indent" ).checked;
+            if( !isUsingCustomIndentation ) {
 
-            // If we're outdenting, reset indentation and add the
-            // outdent template. This requires that there be at least
-            // one character of indentation.
-            var outdentCheckbox = document.getElementById( "reply-link-option-outdent" );
-            if( outdentCheckbox && outdentCheckbox.checked ) {
-                replyLines[0] = "{" + "{od|" + indentation.slice( 0, -1 ) +
-                    "}}" + replyLines[0];
-                indentation = "";
-            }
+                var replyLines = reply.split( "\n" );
 
-            // Compose reply by adding indentation at the beginning of
-            // each line (if not replying to an XfD nom) or {{pb}}'s
-            // between lines (if replying to an XfD nom)
-            var fullReply;
-            if( rplyToXfdNom ) {
+                // If we're outdenting, reset indentation and add the
+                // outdent template. This requires that there be at least
+                // one character of indentation.
+                var outdentCheckbox = document.getElementById( "reply-link-option-outdent" );
+                if( outdentCheckbox && outdentCheckbox.checked ) {
+                    replyLines[0] = "{" + "{od|" + indentation.slice( 0, -1 ) +
+                        "}}" + replyLines[0];
+                    indentation = "";
+                }
 
-                // If there's a list in this reply, it's a bad idea to
-                // use pb's, even though the markup'll probably be broken
-                if( replyLines.some( function ( l ) { return l.substr( 0, 1 ) === "*"; } ) ) {
-                    fullReply = replyLines.map( function ( line ) {
-                        return indentation + "*" + line;
-                    } ).join( "\n" );
+                // Compose reply by adding indentation at the beginning of
+                // each line (if not replying to an XfD nom) or {{pb}}'s
+                // between lines (if replying to an XfD nom)
+                var fullReply;
+                if( rplyToXfdNom ) {
+
+                    // If there's a list in this reply, it's a bad idea to
+                    // use pb's, even though the markup'll probably be broken
+                    if( replyLines.some( function ( l ) { return l.substr( 0, 1 ) === "*"; } ) ) {
+                        fullReply = replyLines.map( function ( line ) {
+                            return indentation + "*" + line;
+                        } ).join( "\n" );
+                    } else {
+                        fullReply = indentation + "* " + replyLines.join( "{{pb}}" );
+                    }
                 } else {
-                    fullReply = indentation + "* " + replyLines.join( "{{pb}}" );
+                    fullReply = replyLines.map( function ( line ) {
+                        return indentation + ":" + line;
+                    } ).join( "\n" );
                 }
             } else {
-                fullReply = replyLines.map( function ( line ) {
-                    return indentation + ":" + line;
-                } ).join( "\n" );
+                fullReply = reply;
             }
 
             // Prepare section metadata for getSectionWikitext call
@@ -1633,6 +1640,10 @@ function loadReplyLink( $, mw ) {
                 // offer to outdent
                 if( ourMetadata[0].length >= OUTDENT_THRESH ) {
                     newOption( "reply-link-option-outdent", "Outdent?", false );
+                }
+
+                if( window.replyLinkCustomIndentation === "checkbox" ) {
+                    newOption( "reply-link-option-custom-indent", "Custom indentation?", false );
                 }
 
                 /* Commented out because I could never get it to work
@@ -2103,6 +2114,7 @@ function loadReplyLink( $, mw ) {
         if( window.replyLinkCustomSummary === undefined ) window.replyLinkCustomSummary = false;
         if( window.replyLinkTestMode === undefined ) window.replyLinkTestMode = false;
         if( window.replyLinkTestInstantReply === undefined) window.replyLinkTestInstantReply = false;
+        if( window.replyLinkCustomIndentation === undefined ) window.replyLinkCustomIndentation = "never";
 
         // Insert "reply" links into DOM
         attachLinks();
