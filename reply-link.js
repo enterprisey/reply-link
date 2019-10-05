@@ -1314,10 +1314,10 @@ function loadReplyLink( $, mw ) {
                     window.replyLinkSigPrefix : "" ) + LITERAL_SIGNATURE;
             }
 
-            var isUsingCustomIndentation = window.replyLinkCustomIndentation === "checkbox"
-                ? document.getElementById( "reply-link-option-custom-indent" ).checked
-                : window.replyLinkCustomIndentation === "always";
-            if( !isUsingCustomIndentation ) {
+            var isUsingAutoIndentation = window.replyLinkAutoIndentation === "checkbox"
+                ? document.getElementById( "reply-link-option-auto-indent" ).checked
+                : window.replyLinkAutoIndentation === "always";
+            if( isUsingAutoIndentation ) {
 
                 var replyLines = reply.split( "\n" );
 
@@ -1643,8 +1643,8 @@ function loadReplyLink( $, mw ) {
                     newOption( "reply-link-option-outdent", "Outdent?", false );
                 }
 
-                if( window.replyLinkCustomIndentation === "checkbox" ) {
-                    newOption( "reply-link-option-custom-indent", "Custom indentation?", false );
+                if( window.replyLinkAutoIndentation === "checkbox" ) {
+                    newOption( "reply-link-option-auto-indent", "Automatically indent?", true );
                 }
 
                 /* Commented out because I could never get it to work
@@ -2123,7 +2123,7 @@ function loadReplyLink( $, mw ) {
         if( window.replyLinkCustomSummary === undefined ) window.replyLinkCustomSummary = false;
         if( window.replyLinkTestMode === undefined ) window.replyLinkTestMode = false;
         if( window.replyLinkTestInstantReply === undefined) window.replyLinkTestInstantReply = false;
-        if( window.replyLinkCustomIndentation === undefined ) window.replyLinkCustomIndentation = "never";
+        if( window.replyLinkAutoIndentation === undefined ) window.replyLinkAutoIndentation = "checkbox";
 
         // Insert "reply" links into DOM
         attachLinks();
