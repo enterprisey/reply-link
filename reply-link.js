@@ -620,7 +620,7 @@ function loadReplyLink( $, mw ) {
                 if( hrefTokens.length !== 2 ) throw new Error( "Malformed href" );
                 newHref = "./" + canonicalizeNs( hrefTokens[0].replace(
                         /^\/wiki\//, "" ) ).replace( / /g, "_" ) + ":" +
-                        encodeURIComponent( hrefTokens[1] )
+                        hrefTokens[1]
                             .replace( /^Contributions%2F/, "Contributions/" )
                             .replace( /%2F/g, "/" )
                             .replace( /%23/g, "#" )
