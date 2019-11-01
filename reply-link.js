@@ -931,7 +931,7 @@ function loadReplyLink( $, mw ) {
                     var innerTransclusions = container.querySelectorAll( "*[typeof='mw:Transclusion']" );
                     if( innerTransclusions.length ) {
                         var transcludesNonTemplate = iterableToList(
-                                innerTransclusions ).any( function ( transclusion ) {
+                                innerTransclusions ).some( function ( transclusion ) {
                                     return hasDiscussionPage( transclusion.dataset.mw );
                                 } );
                         if( !transcludesNonTemplate && containerAbout === tsclnId ) {
