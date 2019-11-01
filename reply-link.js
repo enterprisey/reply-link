@@ -820,15 +820,17 @@ function loadReplyLink( $, mw ) {
         var HTML_HEADER_RGX = /^h\d$/;
         do {
             if( HTML_HEADER_RGX.exec( currNode.tagName.toLowerCase() ) ) {
-                if( !inPseudo( currNode ) ) {
+                // Commented because I don't think the !inPseudo requirement is necessary 2019-11-01
+                //if( !inPseudo( currNode ) ) {
                     nearestHeader = currNode;
                     break;
-                }
+                //}
             }
             var containedHeaders = currNode.querySelectorAll( HEADER_SELECTOR );
             if( containedHeaders.length ) {
                 var nearestHdrIdx = containedHeaders.length - 1;
-                while( nearestHdrIdx >= 0 && inPseudo( containedHeaders[ nearestHdrIdx ] ) ) {
+                // Commented because I don't think the !inPseudo requirement is necessary 2019-11-01
+                while( nearestHdrIdx >= 0 ){//&& inPseudo( containedHeaders[ nearestHdrIdx ] ) ) {
                     nearestHdrIdx--;
                 }
                 if( nearestHdrIdx >= 0 ) {
@@ -853,6 +855,10 @@ function loadReplyLink( $, mw ) {
                 if( infoJson.parts[i].template &&
                         infoJson.parts[i].template.target ) {
                     var wtTarget =infoJson.parts[i].template.target.wt;
+
+                    // We're only interested in transclusions of non-template pages (must have a ":",
+                    // indicating a different namespace besides "Template"), or subpages of template pages
+                    // (handles DYK nomations, for example).
                     if( wtTarget && ( wtTarget.indexOf( ":" ) >= 0 || wtTarget.indexOf( "/" ) === 0 ) ) {
                         targetPage = infoJson.parts[i].template.target.wt;
                     }
