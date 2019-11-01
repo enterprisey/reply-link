@@ -1599,7 +1599,7 @@ function loadReplyLink( $, mw ) {
                     "<div id='reply-link-preview' class='gone-on-empty' style='border: thin dashed gray; padding: 0.5em; margin-top: 0.5em'></div>";
                 parent.insertBefore( panelEl, newLinkWrapper.nextSibling );
                 var replyDialogField = document.getElementById( "reply-dialog-field" );
-                replyDialogField.style = "padding: 0.625em; min-height: 10em; margin-bottom: 0.75em;";
+                replyDialogField.style = "padding: 0.625em; min-height: 10em; margin-bottom: 0.75em; line-height: 1.3";
                 if( window.replyLinkPreloadPing === "always" &&
                         cmtAuthor &&
                         cmtAuthor !== mw.config.get( "wgUserName" ) &&
