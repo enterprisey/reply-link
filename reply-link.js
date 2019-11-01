@@ -1315,7 +1315,8 @@ function loadReplyLink( $, mw ) {
             }
 
             var isUsingAutoIndentation = window.replyLinkAutoIndentation === "checkbox"
-                ? document.getElementById( "reply-link-option-auto-indent" ).checked
+                ? ( !document.getElementById( "reply-link-option-auto-indent" ) ||
+                    document.getElementById( "reply-link-option-auto-indent" ).checked )
                 : window.replyLinkAutoIndentation === "always";
             if( isUsingAutoIndentation ) {
 
@@ -1916,15 +1917,20 @@ function loadReplyLink( $, mw ) {
             } else if( node.nodeType === 1 &&
                     /^(div|p|dl|dd|ul|li|span|ol|table|tbody|tr|td)$/.test( node.tagName.toLowerCase() ) ) {
                 switch( node.tagName.toLowerCase() ) {
-                case "dl": newIndentSymbol = ":"; break;
-                case "ul": newIndentSymbol = "*"; break;
-                case "ol": newIndentSymbol = "#"; break;
-                case "table":
-                    if( node.className.indexOf( "mw-collapsible" ) < 0 ) {
-                        continue;
-                    }
-                    break;
-                default: newIndentSymbol = ""; break;
+                    case "dl": newIndentSymbol = ":"; break;
+                    case "ul": newIndentSymbol = "*"; break;
+                    case "ol": newIndentSymbol = "#"; break;
+                    case "table":
+                        if( node.className.indexOf( "mw-collapsible" ) < 0 ) {
+                            continue;
+                        }
+                        break;
+                    case "div":
+                        if( node.className.indexOf( "xfd_relist" ) >= 0 ) {
+                            continue;
+                        }
+                        break;
+                    default: newIndentSymbol = ""; break;
                 }
 
                 var childNodes = node.childNodes;
@@ -2174,3 +2180,4 @@ if( jQuery !== undefined && mediaWiki !== undefined ) {
     }
 }
 //</nowiki>
+
