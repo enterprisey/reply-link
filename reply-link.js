@@ -1690,7 +1690,8 @@ function loadReplyLink( $, mw ) {
                     document.querySelector( "#reply-link-buttons button" ).disabled = true;
                     setStatus( "Loading..." );
 
-                    var parsoidUrl = PARSOID_ENDPOINT + encodeURIComponent( currentPageName ),
+                    var parsoidUrl = PARSOID_ENDPOINT + encodeURIComponent( currentPageName ) +
+                            "/" + mw.config.get( "wgCurRevisionId" ),
                         findSectionResultPromise = $.get( parsoidUrl )
                             .then( function ( parsoidDomString ) {
                                 return findSection( parsoidDomString, cmtLink );
