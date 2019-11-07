@@ -443,7 +443,8 @@ function loadReplyLink( $, mw ) {
         var smallOrFake = sigNode.nodeType === 1 &&
                 ( sigNode.tagName.toLowerCase() === "small" ||
                 ( sigNode.tagName.toLowerCase() === "span" &&
-                    sigNode.style && sigNode.style.getPropertyValue( "font-size" ) === "85%" ) );
+                    sigNode.style && ( sigNode.style.getPropertyValue( "font-size" ) === "85%" ||
+                                       sigNode.style.getPropertyValue( "font-size" ).indexOf( "small" ) === 0 ) ) );
 
         var possUserLinkElem = ( smallOrFake && sigNode.children.length > 1 )
             ? sigNode.children[sigNode.children.length-1]
