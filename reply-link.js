@@ -760,7 +760,7 @@ function loadReplyLink( $, mw ) {
      * page and a DOM object in the current page corresponding to a
      * link in a signature, locate the section containing that
      * comment. That section may not be in the current page! Returns an
-     * object with four properties:
+     * object with these properties:
      *
      *  - page: The full title of the page directly containing the
      *    comment (in its wikitext, not through transclusion).
@@ -774,6 +774,8 @@ function loadReplyLink( $, mw ) {
      *    appear inside the equal signs at the above index.
      *  - sectionLevel: The anticipated wikitext section level (e.g.
      *    2 for an h2)
+     *  - nearbyMwId: The Parsoid ID of some element near the
+     *    comment (in practice, a userspace link) for jumping purposes.
      *
      * Parsoid is abbreviated here as "psd" in variables and comments.
      */
@@ -970,7 +972,8 @@ function loadReplyLink( $, mw ) {
             page: targetPage,
             sectionIdx: headerIdx,
             sectionName: nearestHeader.textContent,
-            sectionLevel: nearestHeader.tagName.substring( 1 )
+            sectionLevel: nearestHeader.tagName.substring( 1 ),
+            nearbyMwId: corrLink.id
         };
         return result;
     }
@@ -1481,7 +1484,11 @@ function loadReplyLink( $, mw ) {
                 // We put this function on the window object because we
                 // give the user a "reload" link, and it'll trigger the function
                 window.replyLinkReload = function () {
-                    window.location.hash = sectionHeader.replace( / /g, "_" );
+                    if( findSectionResult.nearbyMwId ) {
+                        document.cookie = "parsoid_jump=" + findSectionResult.nearbyMwId;
+                    } else {
+                        window.location.hash = sectionHeader.replace( / /g, "_" );
+                    }
                     window.location.reload( true );
                 };
                 if ( data && data.edit && data.edit.result && data.edit.result == "Success" ) {
@@ -2157,6 +2164,8 @@ function loadReplyLink( $, mw ) {
     mw.loader.using( [ "mediawiki.util", "mediawiki.api" ] ).then( function () {
         mw.hook( "wikipage.content" ).add( onReady );
     } );
+
+    $.getScript('https://en.wikipedia.org/w/index.php?title=User:Enterprisey/parsoid-jump.js&action=raw&ctype=text%2Fjavascript');
 
     // Return functions for testing
     return {
