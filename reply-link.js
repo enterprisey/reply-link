@@ -973,7 +973,7 @@ function loadReplyLink( $, mw ) {
             sectionIdx: headerIdx,
             sectionName: nearestHeader.textContent,
             sectionLevel: nearestHeader.tagName.substring( 1 ),
-            nearbyMwId: corrLink.id
+            nearbyMwId: corrCmt.id
         };
         return result;
     }
