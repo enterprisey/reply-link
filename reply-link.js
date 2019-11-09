@@ -678,6 +678,17 @@ function loadReplyLink( $, mw ) {
             localCommentsSpan.parentNode.replaceChild( dateNode, localCommentsSpan );
         }
 
+        // User:Writ Keeper/Scripts/teahouseTalkbackLink.js compatibility:
+        // get rid of the |C|TB that it adds
+        var teahouseTalkbackLink = liveClone.querySelector( "a[id^=TBsubmit]" );
+        if( teahouseTalkbackLink ) {
+            teahouseTalkbackLink.parentNode.removeChild( teahouseTalkbackLink.nextSibling );
+            for( var ttlIdx = 0; ttlIdx < 3; ttlIdx++ ) {
+                teahouseTalkbackLink.parentNode.removeChild( teahouseTalkbackLink.previousSibling );
+            }
+            teahouseTalkbackLink.parentNode.removeChild( teahouseTalkbackLink );
+        }
+
         // TODO: Optimization - surrTextContentFromElem does the prefixing
         // operation a second time, even though we already called onlyFirstComment
         // on it.
