@@ -1412,7 +1412,7 @@ function loadReplyLink( $, mw ) {
 
             // Determine the user who wrote the comment, for
             // edit-summary and sanity-check purposes
-            var userRgx = new RegExp( /\[\[\s*:?\s*/.source + userspcLinkRgx.both + /\s*(.+?)(?:\/.+?)?(?:#.+?)?\s*(?:\|.+?)?\]\]/.source, "g" );
+            var userRgx = new RegExp( /\[\[\s*:?\s*/.source + userspcLinkRgx.both + /\s*(.+?)(?:\/.+?)?(?:#.+?)?\s*(?:\|.+?)?\]\]/.source, "ig" );
             var userMatches = sectionWikitext.slice( 0, strIdx ).match( userRgx );
             var cmtAuthorWktxt = userRgx.exec(
                     userMatches[userMatches.length - 1] )[1];
