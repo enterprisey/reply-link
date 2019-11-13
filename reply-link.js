@@ -8,6 +8,7 @@ function loadReplyLink( $, mw ) {
     var ADVERT = " (using [[w:en:User:Enterprisey/reply-link|reply-link]])";
     var PARSOID_ENDPOINT = "https:" + mw.config.get( "wgServer" ) + "/api/rest_v1/page/html/";
     var HEADER_SELECTOR = "h1,h2,h3,h4,h5,h6";
+    var MAX_UNICODE_DECIMAL = 1114111;
 
     // T:TDYK, used at the end of loadReplyLink
     var TTDYK = "Template:Did_you_know_nominations";
@@ -160,22 +161,29 @@ function loadReplyLink( $, mw ) {
     }
 
     /**
-     * Decode HTML entities. Used in the signature sanity check.
-     * Source: https://stackoverflow.com/a/1912522/1757964
-     */
-    function htmlDecode( html ) {
-        var el = document.createElement( "span" );
-        el.innerHTML = html;
-        return el.childNodes[0].nodeValue;
-    }
-
-    /**
      * Process HTML character entities.
      * From https://stackoverflow.com/a/46851765
      */
     function processCharEntities( text ) {
         var el = document.createElement('div');
         return text.replace( /\&[#0-9a-z]+;/gi, function ( enc ) {
+            el.innerHTML = enc;
+            return el.innerText
+        } );
+    }
+
+    /**
+     * Process HTML character entities, MediaWiki style
+     * From https://stackoverflow.com/a/46851765
+     */
+    function processCharEntitiesWikitext( text ) {
+        var el = document.createElement('div');
+        return text.replace( /\&[#0-9a-z]+;/gi, function ( enc ) {
+            if( /#\d+/.test( enc ) ) {
+                if( parseInt( enc.slice( 1 ) ) > MAX_UNICODE_DECIMAL ) {
+                    return enc;
+                }
+            }
             el.innerHTML = enc;
             return el.innerText
         } );
@@ -610,7 +618,7 @@ function loadReplyLink( $, mw ) {
         // We dump this object for debugging in the event of an error
         var corrCmtDebug = {};
 
-        // Convert live href to psd href
+        // Convert live href to psd href (aka newHref)
         var newHref, liveHref = decodeURIComponent( sigLinkElem.getAttribute( "href" ) );
         corrCmtDebug.liveHref = liveHref;
         if( sigLinkElem.className.indexOf( "mw-selflink" ) >= 0 ) {
@@ -633,12 +641,16 @@ function loadReplyLink( $, mw ) {
                 newHref = "./" + REDLINK_HREF_RGX.exec( liveHref )[1];
             }
         }
+        newHref = newHref.replace( /'/g, "\\'" );
         var livePath = ascendToCommentContainer( sigLinkElem, /* live */ true, /* recordPath */ true );
         corrCmtDebug.newHref = newHref; corrCmtDebug.livePath = livePath;
 
         // Deal with the case where the comment has multiple links to
         // sigLinkElem's href; we will store the index of the link we want.
         // null means there aren't multiple links.
+        if( liveHref ) {
+            liveHref = liveHref.replace( /'/g, "\\'" );
+        }
         var liveDupeLinks = livePath[0].querySelectorAll( "a" +
                 ( liveHref ? ( "[href='" + liveHref + "']" ) : ".mw-selflink" ) );
         if( !liveDupeLinks ) throw new Error( "Couldn't select live dupe link" );
@@ -1413,7 +1425,7 @@ function loadReplyLink( $, mw ) {
             // Determine the user who wrote the comment, for
             // edit-summary and sanity-check purposes
             var userRgx = new RegExp( /\[\[\s*:?\s*/.source + userspcLinkRgx.both + /\s*(.+?)(?:\/.+?)?(?:#.+?)?\s*(?:\|.+?)?\]\]/.source, "ig" );
-            var userMatches = sectionWikitext.slice( 0, strIdx ).match( userRgx );
+            var userMatches = processCharEntitiesWikitext( sectionWikitext.slice( 0, strIdx ) ).match( userRgx );
             var cmtAuthorWktxt = userRgx.exec(
                     userMatches[userMatches.length - 1] )[1];
 
@@ -1435,7 +1447,7 @@ function loadReplyLink( $, mw ) {
             // DOM one?  We attempt to check sigRedirectMapping in case
             // the naive check fails
             if( cmtAuthorWktxt !== cmtAuthorDom &&
-                    htmlDecode( cmtAuthorWktxt ) !== cmtAuthorDom &&
+                    processCharEntitiesWikitext( cmtAuthorWktxt ) !== cmtAuthorDom &&
                     sigRedirectMapping[ cmtAuthorWktxt ] !== cmtAuthorDom ) {
                 throw new Error( "Sanity check on sig username failed! Found " +
                     cmtAuthorWktxt + " but expected " + cmtAuthorDom +
@@ -1611,7 +1623,7 @@ function loadReplyLink( $, mw ) {
                     " placeholder='Reply here!'></textarea>" +
                     ( window.replyLinkCustomSummary ? "<label for='reply-link-summary'>Summary: </label>" +
                         "<input id='reply-link-summary' class='mw-ui-input' placeholder='Edit summary' " +
-                        "value='Replying to " + cmtAuthor + "'/><br />" : "" ) +
+                        "value='Replying to " + cmtAuthor.replace( /'/g, "&#39;" ) + "'/><br />" : "" ) +
                     "<table style='border-collapse:collapse'><tr><td id='reply-link-buttons' style='width: " +
                     ( window.replyLinkPreloadPing === "button" ? "325" : "255" ) + "px'>" +
                     "<button id='reply-dialog-button' class='mw-ui-button mw-ui-progressive'>Reply</button> " +
