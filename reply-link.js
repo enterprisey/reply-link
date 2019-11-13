@@ -1495,10 +1495,9 @@ function loadReplyLink( $, mw ) {
                 // We put this function on the window object because we
                 // give the user a "reload" link, and it'll trigger the function
                 window.replyLinkReload = function () {
+                    window.location.hash = sectionHeader.replace( / /g, "_" );
                     if( findSectionResult.nearbyMwId ) {
                         document.cookie = "parsoid_jump=" + findSectionResult.nearbyMwId;
-                    } else {
-                        window.location.hash = sectionHeader.replace( / /g, "_" );
                     }
                     window.location.reload( true );
                 };
