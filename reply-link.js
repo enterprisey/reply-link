@@ -1163,11 +1163,11 @@ function loadReplyLink( $, mw ) {
          * It's also localized.
          */
         var sigRgxSrc = "(?:" + /\[\[\s*:?\s*/.source + "(" + userspcLinkRgx.both +
-                /([^\]]||\](?!\]))*?/.source + ")" + /\]\]\)?/.source + "(" +
+                /([^\]]|\](?!\]))*?/.source + ")" + /\]\]\)?/.source + "(" +
                 /[^\[]|\[(?!\[)|\[\[/.source + "(?!" + userspcLinkRgx.both +
                 "))*?" + DATE_FMT_RGX[mw.config.get( "wgServer" )] +
                 /\s+\(UTC\)|class\s*=\s*"autosigned".+?\(UTC\)<\/small>/.source +
-                ")" + /(\S*([ \t\f]|<!--.*?-->)*(?:\{\{.+?\}\})?(?!\S)|\S+([ \t\f]|<!--.*?-->)*)$/.source;
+                ")" + /(\S*([ \t\f]|<!--.*?-->)*(?:\{\{.+?\}\})?(?!\S)|\s?\S+([ \t\f]|<!--.*?-->)*)$/.source;
         var sigRgx = new RegExp( sigRgxSrc, "igm" );
         var matchIdx = 0;
         var match;
