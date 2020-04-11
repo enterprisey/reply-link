@@ -642,7 +642,7 @@ function loadReplyLink( $, mw ) {
                 newHref = "./" + REDLINK_HREF_RGX.exec( liveHref )[1];
             }
         }
-        newHref = newHref.replace( /'/g, "\\'" );
+        newHref = newHref.replace( /'/g, "\\'" ).replace( /\\/g, "\\\\" );
         var livePath = ascendToCommentContainer( sigLinkElem, /* live */ true, /* recordPath */ true );
         corrCmtDebug.newHref = newHref; corrCmtDebug.livePath = livePath;
 
