@@ -9,6 +9,7 @@ function loadReplyLink( $, mw ) {
     var PARSOID_ENDPOINT = "https:" + mw.config.get( "wgServer" ) + "/api/rest_v1/page/html/";
     var HEADER_SELECTOR = "h1,h2,h3,h4,h5,h6";
     var MAX_UNICODE_DECIMAL = 1114111;
+    var HEADER_REGEX = /^\s*=(=*)\s*(.+?)\s*\1=\s*$/gm;
 
     // T:TDYK, used at the end of loadReplyLink
     var TTDYK = "Template:Did_you_know_nominations";
@@ -234,6 +235,10 @@ function loadReplyLink( $, mw ) {
             .replace( /('''?)(.+?)\1/g, "$2" )
             .replace( /<s>(.+?)<\/s>/g, "$1" )
             .replace( /<span.*?>(.*?)<\/span>/g, "$1" );
+    }
+
+    function wikitextHeaderEqualsDomHeader( wikitextHeader, domHeader ) {
+        return wikitextToTextContent( wikitextHeader ) === deArmorFrenchSpaces( domHeader );
     }
 
     /**
@@ -532,7 +537,7 @@ function loadReplyLink( $, mw ) {
     /**
      * Given a Parsoid DOM and a link in the live DOM that is the link at the
      * end of a signature, return the corresponding element in the Parsoid DOM
-     * that represents the same comment.
+     * that represents the same comment, or null if none was found.
      *
      * psd = Parsoid, live = in the current, live page DOM.
      */
@@ -771,31 +776,30 @@ function loadReplyLink( $, mw ) {
         }
 
         if( psdCorrLinks.length === 0 ) {
-            throw new Error( "Failed to find a matching comment in the Parsoid DOM." );
+            console.error( "Failed to find a matching comment in the Parsoid DOM." );
+            return null;
         } else if( psdCorrLinks.length > 1 ) {
-            throw new Error( "Found multiple matching comments in the Parsoid DOM." );
+            console.error( "Found multiple matching comments in the Parsoid DOM." );
+            return null;
         }
 
         return psdCorrLinks[0];
     }
 
     /**
-     * Given the Parsoid output (GET /page/html endpoint) on the current
-     * page and a DOM object in the current page corresponding to a
-     * link in a signature, locate the section containing that
-     * comment. That section may not be in the current page! Returns an
-     * object with these properties:
+     * Given a page title, the Parsoid output (GET /page/html endpoint)
+     * of that page, page and a DOM object in the current page
+     * corresponding to a link in a signature, locate the section
+     * containing that comment. That section may not be in the provided
+     * page! Returns an object with these properties:
      *
      *  - page: The full title of the page directly containing the
      *    comment (in its wikitext, not through transclusion).
-     *  - sectionIdx: The anticipated wikitext section index containing
-     *    the comment. That is, our best guess as to what the section
-     *    index (in the wikitext, using ==wikitext headers==) will be,
-     *    ignoring all of the wikitext headers that don't actually
-     *    generate header elements (e.g. those inside nowikis, code
-     *    blocks, etc).
      *  - sectionName: The anticipated wikitext section name. Should
      *    appear inside the equal signs at the above index.
+     *  - sectionDupeIdx: If there are multiple sections with the same
+     *    name, the 0-based index of the section with the comment among
+     *    those sections. Otherwise, 0.
      *  - sectionLevel: The anticipated wikitext section level (e.g.
      *    2 for an h2)
      *  - nearbyMwId: The Parsoid ID of some element near the
@@ -803,7 +807,8 @@ function loadReplyLink( $, mw ) {
      *
      * Parsoid is abbreviated here as "psd" in variables and comments.
      */
-    function findSection( psdDomString, sigLinkElem ) {
+    function findSection( psdDomPageTitle, psdDomString, sigLinkElem ) {
+        console.log("findSection(",psdDomPageTitle,", ...)");
 
         //console.log(psdDomString);
 
@@ -811,6 +816,9 @@ function loadReplyLink( $, mw ) {
             psdDom = domParser.parseFromString( psdDomString, "text/html" );
 
         var corrLink = getCorrCmt( psdDom, sigLinkElem );
+        if( corrLink === null ) {
+            return $.when();
+        }
         //console.log("STEP 1 SUCCESS",corrLink);
 
         var corrCmt = ascendToCommentContainer( corrLink, /* live */ false );
@@ -828,7 +836,7 @@ function loadReplyLink( $, mw ) {
         } while( currNode.tagName.toLowerCase() !== "html" );
         //console.log( "tsclnId", tsclnId );
 
-        // Now, get the nearest header above us
+        // Helper function: are we in a pseudo-section? (Unused, at the moment.)
         function inPseudo( headerElement ) {
             var currNodeIP = headerElement;
             // This requires Parsoid HTML v 2.0.0
@@ -842,12 +850,13 @@ function loadReplyLink( $, mw ) {
             return false;
         }
 
+        // Now, get the nearest header above us
         var currNode = corrCmt;
         var nearestHeader = null;
         var HTML_HEADER_RGX = /^h\d$/;
         do {
             if( HTML_HEADER_RGX.exec( currNode.tagName.toLowerCase() ) ) {
-                // Commented because I don't think the !inPseudo requirement is necessary 2019-11-01
+                // Commented because I don't think the !inPseudo requirement is necessary 2019-nov-01
                 //if( !inPseudo( currNode ) ) {
                     nearestHeader = currNode;
                     break;
@@ -856,10 +865,12 @@ function loadReplyLink( $, mw ) {
             var containedHeaders = currNode.querySelectorAll( HEADER_SELECTOR );
             if( containedHeaders.length ) {
                 var nearestHdrIdx = containedHeaders.length - 1;
-                // Commented because I don't think the !inPseudo requirement is necessary 2019-11-01
-                while( nearestHdrIdx >= 0 ){//&& inPseudo( containedHeaders[ nearestHdrIdx ] ) ) {
-                    nearestHdrIdx--;
-                }
+                // Commented because I don't think the !inPseudo requirement is necessary 2019-nov-01
+
+                // TODO this is an extraordinarily silly while loop; it has been temporarily commented 2020-apr-25
+                //while( nearestHdrIdx >= 0 ){//&& inPseudo( containedHeaders[ nearestHdrIdx ] ) ) 
+                //    nearestHdrIdx--;
+                //}
                 if( nearestHdrIdx >= 0 ) {
                     nearestHeader = containedHeaders[ nearestHdrIdx ];
                     break;
@@ -874,147 +885,150 @@ function loadReplyLink( $, mw ) {
 
         // Get the target page (page actually containing the comment)
         var targetPage;
-        if( tsclnId !== null ) {
+        if( tsclnId === null ) {
+            console.warn( "tsclnId === null" );
+            targetPage = psdDomPageTitle;
+        } else {
             var tsclnInfoSel = "*[about='" + tsclnId + "'][typeof='mw:Transclusion']",
                 infoJson = JSON.parse( psdDom.querySelector( tsclnInfoSel ) .dataset.mw );
-            //console.log(infoJson);
-            for( var i = 0; i < infoJson.parts.length; i++ ) {
-                if( infoJson.parts[i].template &&
-                        infoJson.parts[i].template.target ) {
-                    var wtTarget =infoJson.parts[i].template.target.wt;
 
-                    // We're only interested in transclusions of non-template pages (must have a ":",
-                    // indicating a different namespace besides "Template"), or subpages of template pages
-                    // (handles DYK nomations, for example).
-                    if( wtTarget && ( wtTarget.indexOf( ":" ) >= 0 || wtTarget.indexOf( "/" ) === 0 ) ) {
-                        targetPage = infoJson.parts[i].template.target.wt;
+            // First, check the first and last wikitext segments to see if they have the header
+            var firstWktxtSegIdx = 0;
+            while( infoJson.parts[firstWktxtSegIdx].template &&
+                infoJson.parts[firstWktxtSegIdx].template.target.href.startsWith( "Template:" ) &&
+                firstWktxtSegIdx < infoJson.parts.length ) {
+                firstWktxtSegIdx++;
+            }
+            if( firstWktxtSegIdx < infoJson.parts.length && typeof infoJson.parts[firstWktxtSegIdx] === typeof '' ) {
+                var firstWktxtSeg = infoJson.parts[firstWktxtSegIdx];
+                var headerMatch = null;
+                do {
+                    headerMatch = HEADER_REGEX.exec( firstWktxtSeg );
+                    if( headerMatch ) {
+                        if( wikitextHeaderEqualsDomHeader( headerMatch[2], nearestHeader.textContent ) ) {
+                            targetPage = psdDomPageTitle;
+                            break;
+                        }
                     }
-                }
+                } while( headerMatch );
             }
         }
-        if( targetPage && targetPage.charAt( 0 ) === "/" ) {
 
-            // Given relative to the current page
-            targetPage = currentPageName + targetPage;
-        } else if( !targetPage ) {
-            if( tsclnId !== null ) tsclnId = null;
-            targetPage = currentPageName;
+        if( !targetPage ) {
+            var lastWktxtSegIdx = infoJson.parts.length - 1;
+            while( infoJson.parts[lastWktxtSegIdx].template &&
+                infoJson.parts[lastWktxtSegIdx].template.target.href.startsWith( "Template:" ) &&
+                lastWktxtSegIdx >= 0 ) {
+                lastWktxtSegIdx--;
+            }
+            if( lastWktxtSegIdx >= 0 && typeof infoJson.parts[lastWktxtSegIdx] === typeof '' ) {
+                var lastWktxtSeg = infoJson.parts[lastWktxtSegIdx];
+                var headerMatch = null;
+                do {
+                    headerMatch = HEADER_REGEX.exec( lastWktxtSeg );
+                    if( headerMatch ) {
+                        if( wikitextHeaderEqualsDomHeader( headerMatch[2], nearestHeader.textContent ) ) {
+                            targetPage = psdDomPageTitle;
+                            break;
+                        }
+                    }
+                } while( headerMatch );
+            }
         }
 
-        // Finally, get the index of our nearest header
-        var allHeaders = iterableToList( psdDom.querySelectorAll( HEADER_SELECTOR ) );
-        var headerIdx = null, headerAbout;
-        var tIdx = 0; // "header index for headers inside tsclnId"
+        var recursiveCalls = $.when();
+        if( !targetPage ) {
+            // Recurse on all non-top-level Templates!
 
-        // Note that i is incremented at the end of the loop because
-        // sometimes we want to skip an index, such as when it comes
-        // from another template
-        for( var i = 0; i < allHeaders.length; ) {
-            if( allHeaders[i] === nearestHeader ) {
-                headerIdx = tIdx;
-                break;
+            var pages = infoJson.parts.filter( function ( part ) {
+                return part.template &&
+                    part.template.target &&
+                    part.template.target.href && (
+                        !part.template.target.href.startsWith("./Template") ||
+                        ( part.template.target.href.match( new RegExp( '/', 'g' ) ) || [] ).length >= 2
+                    );
+            } );
+            if( pages.length ) {
+                var pageNames = pages.map( function ( part ) {
+                    return part.template.target.href.substring( 2 ); // remove the ./
+                } );
+                var deferreds = pageNames.map( function ( pageName ) {
+                    return $.get( PARSOID_ENDPOINT + encodeURIComponent( pageName ) );
+                } );
+                recursiveCalls = $.when.apply( $, deferreds ).then( function () {
+                    var results = arguments; // use keyword "arguments" to access deferred results
+                    var deferreds2 = [];
+                    for( var i = 0; i < pageNames.length; i++ ) {
+                        deferreds2.push( findSection( pageNames[i], results[i], sigLinkElem ) );
+                    }
+                    return $.when.apply( $, deferreds2 ).then( function () {
+                        var results2 = Array.prototype.slice.call( arguments );
+                        results2 = results2.filter( Boolean ); // filter out nulls
+                        console.log("results2 ",results2);
+                        if( results2.length === 0 ) {
+                            return null;
+                        } else if( results2.length === 1 ) {
+                            return results2[0];
+                        } else {
+                            console.error("WTF");
+                        }
+                    } );
+                } );
             }
-            headerAbout = allHeaders[i].getAttribute( "about" );
-            if( allHeaders[i].hasAttribute( "about" ) ) {
-                if( headerAbout === tsclnId ) {
-                    tIdx++;
-                }
-                i++;
-                continue;
+        }
+
+        return recursiveCalls.then( function ( data ) {
+            if( data ) {
+                return data;
             } else {
-                var currNode = allHeaders[i];
-                var container = null, containerAbout = null;
-                while( currNode.tagName.toLowerCase() !== "body" ) {
-                    if( currNode.hasAttribute( "about" ) ) {
-                        container = currNode;
-                        containerAbout = currNode.getAttribute( "about" );
-                        break;
+
+                // We tried recursing, and it didn't work, so the
+                // section must be on the current page
+                targetPage = psdDomPageTitle;
+
+                // Finally, get the index of our nearest header
+                var allHeaders = iterableToList( psdDom.querySelectorAll( HEADER_SELECTOR ) );
+                var headerIdx = null, headerAbout;
+                var tIdx = 0; // "header index for headers inside tsclnId"
+
+                // Note that i is incremented at the end of the loop because
+                // sometimes we want to skip an index, such as when it comes
+                // from another template
+                var sectionDupeIdx = 0;
+                for( var i = 0; i < allHeaders.length; i++ ) {
+                    if( allHeaders[i].textContent === nearestHeader.textContent ) {
+                        if( allHeaders[i] === nearestHeader ) {
+                            headerIdx = tIdx;
+                            break;
+                        } else {
+                            sectionDupeIdx++;
+                        }
                     }
-                    currNode = currNode.parentNode;
                 }
 
-                if( container ) {
-                    function hasDiscussionPage( dataMw ) {
-                        dataMw = JSON.parse( dataMw );
-                        if( dataMw.parts && dataMw.parts.length ) {
-                            return dataMw.parts.some( function ( part ) {
-                                if( part.template && part.template.target && part.template.target.href ) {
-                                    var href = part.template.target.href,
-                                        nsName = ( href.indexOf( ":" ) < 0 ) ? "" : href.substring( 2, href.indexOf( ":" ) ),
-                                        nsId = nsNameToId( nsName );
-                                    if( nsId === 10 ) {
-                                        return part.template.target.href.indexOf( "./Template:Did you know nominations" ) === 0;
-                                    } else {
-                                        return nsId % 2 === 1;
-                                    }
-                                }
-                            } );
-                        }
-                        return false;
-                    }
-
-                    // If the container has any other transcluded non-templates inside it,
-                    // we can't use it, so treat this header normally and move on
-                    var innerTransclusions = container.querySelectorAll( "*[typeof='mw:Transclusion']" );
-                    if( innerTransclusions.length ) {
-                        var transcludesNonTemplate = iterableToList(
-                                innerTransclusions ).some( function ( transclusion ) {
-                                    return hasDiscussionPage( transclusion.dataset.mw );
-                                } );
-                        if( !transcludesNonTemplate && containerAbout === tsclnId ) {
-                            tIdx++;
-                        }
-                        i++;
-                        continue;
-                    }
-
-                    var containerHeaders = iterableToList( container.querySelectorAll( HEADER_SELECTOR ) );
-                    if( container.contains( nearestHeader ) ) {
-                        headerIdx = tIdx + containerHeaders.indexOf( nearestHeader );
-                        break;
-                    } else {
-                        if( containerAbout === tsclnId ||
-                                ( tsclnId === null && container.dataset.mw && !hasDiscussionPage( container.dataset.mw ) ) ) {
-                            tIdx += containerHeaders.length;
-                        }
-                        i += containerHeaders.length;
-                        continue;
-                    }
-                } else {
-                    if( tsclnId === null ) {
-                        tIdx++;
-                    }
-                    i++;
-                    continue;
-                }
+                var result = {
+                    page: targetPage,
+                    sectionName: nearestHeader.textContent,
+                    sectionDupeIdx: sectionDupeIdx,
+                    sectionLevel: nearestHeader.tagName.substring( 1 ), // that is, cut off the "h" at the beginning
+                    nearbyMwId: corrCmt.id
+                };
+                //console.log("findSection return val: ",result);
+                return result;
             }
-            i++;
-        }
-        //console.log("headerIdx ",headerIdx);
-
-        var result = {
-            page: targetPage,
-            sectionIdx: headerIdx,
-            sectionName: nearestHeader.textContent,
-            sectionLevel: nearestHeader.tagName.substring( 1 ),
-            nearbyMwId: corrCmt.id
-        };
-        return result;
+        } );
     }
 
     /**
      * Given some wikitext that's split into sections, return the full
-     * wikitext (including header and newlines until the next header)
-     * of the section with the given (zero-based) index. To get the content
-     * before the first header, sectionIdx should be -1 and sectionName
-     * should be null.
+     * wikitext (including header and newlines until the next header) of
+     * the section with the given name. To get the content before the
+     * first header, sectionName should be "".
      *
      * Performs a sanity check with the given section name.
      */
-    function getSectionWikitext( wikitext, sectionIdx, sectionName ) {
-        var HEADER_RE = /^\s*=(=*)\s*(.+?)\s*\1=\s*$/gm;
-
-        console.log("In getSectionWikitext, sectionIdx = " + sectionIdx + ", sectionName = >" + sectionName + "<");
+    function getSectionWikitext( wikitext, sectionName, sectionDupeIdx ) {
+        console.log("In getSectionWikitext, sectionName = >" + sectionName + "<");
         //console.log("wikitext (first 1000 chars) is " + dirtyWikitext.substring(0, 1000));
 
         // There are certain locations where a header may appear in the
@@ -1040,17 +1054,20 @@ function loadReplyLink( $, mw ) {
         var headerCounter = 0;
         var headerMatch;
 
-        // The section before the first heading starts at idx 0
-        if( sectionIdx === -1 ) {
-            startIdx = 0;
-        }
-
         // So that we don't check every ignore span every time
         var ignoreSpanStartIdx = 0;
 
+        var dupeCount = 0;
+        var lookingForEnd = false;
+
+        if( sectionName === "" ) {
+            // Getting first section
+            lookingForEnd = true;
+        }
+
         headerMatchLoop:
         do {
-            headerMatch = HEADER_RE.exec( wikitext );
+            headerMatch = HEADER_REGEX.exec( wikitext );
             if( headerMatch ) {
 
                 // Check that we're not inside one of the "ignore" spans
@@ -1074,18 +1091,14 @@ function loadReplyLink( $, mw ) {
                 }
 
                 //console.log("Header " + headerCounter + " (idx " + headerMatch.index + "): >" + headerMatch[0].trim() + "<");
-                if( headerCounter === sectionIdx ) {
-                    var sanitizedWktxtSectionName = wikitextToTextContent( headerMatch[2] );
-
-                    sectionName = deArmorFrenchSpaces( sectionName );
-
-                    if( sanitizedWktxtSectionName !== sectionName ) {
-                        throw new Error( "Sanity check on header name failed! Found \"" +
-                                sanitizedWktxtSectionName + "\", expected \"" +
-                                sectionName + "\" (wikitext vs DOM)" );
+                if( wikitextHeaderEqualsDomHeader( /* wikitext */ headerMatch[2], /* dom */ sectionName ) ) {
+                    if( dupeCount === sectionDupeIdx ) {
+                        startIdx = headerMatch.index;
+                        lookingForEnd = true;
+                    } else {
+                        dupeCount++;
                     }
-                    startIdx = headerMatch.index;
-                } else if( headerCounter - 1 === sectionIdx ) {
+                } else if( lookingForEnd ) {
                     endIdx = headerMatch.index;
                     break;
                 }
@@ -1094,8 +1107,7 @@ function loadReplyLink( $, mw ) {
         } while( headerMatch );
 
         if( startIdx < 0 ) {
-            throw( "Could not find section named \"" + sectionName +
-                    "\" at section idx " + sectionIdx );
+            throw( "Could not find section named \"" + sectionName + "\" (dupe idx " + sectionDupeIdx + ")" );
         }
 
         // If we encountered no section after the target section,
@@ -1336,7 +1348,7 @@ function loadReplyLink( $, mw ) {
      */
     function doReply( indentation, header, sigIdx, cmtAuthorDom, rplyToXfdNom, revObj, findSectionResult ) {
         console.log("TOP OF doReply",header,findSectionResult);
-        header = [ "" + findSectionResult.sectionLevel, findSectionResult.sectionName, findSectionResult.sectionIdx ];
+        header = [ "" + findSectionResult.sectionLevel, findSectionResult.sectionName, findSectionResult.sectionDupeIdx ];
         var deferred = $.Deferred();
 
         var wikitext = revObj.content;
@@ -1395,12 +1407,12 @@ function loadReplyLink( $, mw ) {
             }
 
             // Prepare section metadata for getSectionWikitext call
-            //console.log( "in doReply, header =", header );
+            console.log( "in doReply, header =", header );
             var sectionHeader, sectionIdx;
             if( header === null ) {
                 sectionHeader = null, sectionIdx = -1;
             } else {
-                sectionHeader = header[1], sectionIdx = header[2];
+                sectionHeader = header[1], sectionDupeIdx = header[2];
             }
 
             // Compatibility with User:Bility/copySectionLink
@@ -1416,7 +1428,7 @@ function loadReplyLink( $, mw ) {
                 sectionHeader = sectionHeader.replace( /^\d+ /, "" );
             }
 
-            var sectionWikitext = getSectionWikitext( wikitext, sectionIdx, sectionHeader );
+            var sectionWikitext = getSectionWikitext( wikitext, sectionHeader, sectionDupeIdx );
             var oldSectionWikitext = sectionWikitext; // We'll String.replace old w/ new
 
             // Now, obtain the index of the end of the comment
@@ -1729,10 +1741,11 @@ function loadReplyLink( $, mw ) {
                             "/" + mw.config.get( "wgCurRevisionId" ),
                         findSectionResultPromise = $.get( parsoidUrl )
                             .then( function ( parsoidDomString ) {
-                                return findSection( parsoidDomString, cmtLink );
+                                return findSection( currentPageName, parsoidDomString, cmtLink );
                         },console.error );
 
                     var revObjPromise = findSectionResultPromise.then( function ( findSectionResult ) {
+                        console.log( "findSectionResult ", findSectionResult );
                         return getWikitext( findSectionResult.page );
                     },console.error );
 
@@ -2089,7 +2102,7 @@ function loadReplyLink( $, mw ) {
                         cmtAuthor = cmtAuthorAndLink.username,
                         cmtLink = cmtAuthorAndLink.link;
                     var ourMetadata = metadata[ wrapper.children[0].id ];
-                    var findSectionResult = findSection( parsoidDomString, cmtLink );
+                    var findSectionResult = findSection( currentPageName, parsoidDomString, cmtLink );
 
                     getWikitext( findSectionResult.page, /* useCaching */ true ).then( function ( revObj ) {
                             doReply( ourMetadata[0], ourMetadata[1], ourMetadata[2],
