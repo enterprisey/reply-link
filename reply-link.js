@@ -139,7 +139,8 @@ function loadReplyLink( $, mw ) {
     }
 
     /**
-     * Namespace name ("Template") to ID (10).
+     * Namespace name to ID.
+     * For example, nsNameToId( "Template" ) === 10.
      */
     function nsNameToId( nsName ) {
         return mw.config.get( "wgNamespaceIds" )[ nsName.toLowerCase().replace( / /g, "_" ) ];
@@ -428,8 +429,12 @@ function loadReplyLink( $, mw ) {
                 // Also matches redlinks. Why people have redlinks in their sigs on
                 // purpose, I may never know.
                 //console.log( "^\\/(?:wiki\\/" + userspcLinkRgx.und + /(.+?)(?:\/.+?)?(?:#.+)?|w\/index\.php\?title=User(?:_talk)?:(.+?)&action=edit&redlink=1/.source + ")$" )
-                var sigLinkRe = new RegExp( "^\\/(?:wiki\\/" + userspcLinkRgx.und + /(.+?)(?:\/.+?)?(?:#.+)?|w\/index\.php\?title=/.source + userspcLinkRgx.und + /(.+?)&action=edit&redlink=1/.source + ")$" );
-                var usernameMatch = sigLinkRe.exec( decodeURIComponent( link.getAttribute( "href" ) ) );
+                var sigLinkRe = new RegExp( "\\/(?:wiki\\/" + userspcLinkRgx.und + /(.+?)(?:\/.+?)?(?:#.+)?|w\/index\.php\?title=/.source + userspcLinkRgx.und + /(.+?)&action=edit&redlink=1/.source + ")$" );
+                var liveDecodedHref = decodeURIComponent( link.getAttribute( "href" ) );
+                if( liveDecodedHref.startsWith( "/" ) ) {
+                    liveDecodedHref = "https:" + mw.config.get( "wgServer" ) + liveDecodedHref;
+                }
+                var usernameMatch = sigLinkRe.exec( liveDecodedHref );
                 if( usernameMatch ) {
                 //console.log("usernameMatch",usernameMatch)
                     var rawUsername = usernameMatch[1] ? usernameMatch[1] : usernameMatch[2];
@@ -644,7 +649,12 @@ function loadReplyLink( $, mw ) {
                             .replace( /%2C/g, "," );
             } else {
                 var REDLINK_HREF_RGX = /^\/w\/index\.php\?title=(.+?)&action=edit&redlink=1$/;
-                newHref = "./" + REDLINK_HREF_RGX.exec( liveHref )[1];
+                var redlinkMatch = REDLINK_HREF_RGX.exec( liveHref );
+                if( redlinkMatch ) {
+                    newHref = "./" + redlinkMatch[1];
+                } else {
+                    newHref = liveHref.replace( /_/g, '%20' );
+                }
             }
         }
         newHref = newHref.replace( /\\/g, "\\\\" ).replace( /'/g, "\\'" );
@@ -1179,7 +1189,7 @@ function loadReplyLink( $, mw ) {
          *
          * It's also localized.
          */
-        var sigRgxSrc = "(?:" + /\[\[\s*:?\s*/.source + "(" + userspcLinkRgx.both +
+        var sigRgxSrc = "(?:" + /\[\[\s*(?:m:)?:?\s*/.source + "(" + userspcLinkRgx.both +
                 /([^\]]|\](?!\]))*?/.source + ")" + /\]\]\)?/.source + "(" +
                 /[^\[]|\[(?!\[)|\[\[/.source + "(?!" + userspcLinkRgx.both +
                 "))*?" + DATE_FMT_RGX[mw.config.get( "wgServer" )] +
@@ -1441,7 +1451,7 @@ function loadReplyLink( $, mw ) {
 
             // Determine the user who wrote the comment, for
             // edit-summary and sanity-check purposes
-            var userRgx = new RegExp( /\[\[\s*:?\s*/.source + userspcLinkRgx.both + /\s*(.+?)(?:\/.+?)?(?:#.+?)?\s*(?:\|.+?)?\]\]/.source, "ig" );
+            var userRgx = new RegExp( /\[\[\s*(?:m:)?:?\s*/.source + userspcLinkRgx.both + /\s*(.+?)(?:\/.+?)?(?:#.+?)?\s*(?:\|.+?)?\]\]/.source, "ig" );
             var userMatches = processCharEntitiesWikitext( sectionWikitext.slice( 0, strIdx ) ).match( userRgx );
             var cmtAuthorWktxt = userRgx.exec(
                     userMatches[userMatches.length - 1] )[1];
