@@ -1075,6 +1075,9 @@ function loadReplyLink( $, mw ) {
             lookingForEnd = true;
         }
 
+        // Reset regex state, if for some reason we're not running this for the first time
+        HEADER_REGEX.lastIndex = 0;
+
         headerMatchLoop:
         do {
             headerMatch = HEADER_REGEX.exec( wikitext );
@@ -1905,7 +1908,11 @@ function loadReplyLink( $, mw ) {
      */
     function attachLinks () {
         var mainContent = findMainContentEl();
-        if( !mainContent ) return;
+        if( !mainContent ) {
+            console.error( "No main content element found; exiting." );
+            return;
+        }
+
         var contentEls = mainContent.children;
 
         // Find the index of the first header in contentEls
