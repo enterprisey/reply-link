@@ -963,24 +963,43 @@ function loadReplyLink( $, mw ) {
                     return part.template.target.href.substring( 2 ); // remove the ./
                 } );
                 var deferreds = pageNames.map( function ( pageName ) {
-                    return $.get( PARSOID_ENDPOINT + encodeURIComponent( pageName ) );
+                    return $.get( PARSOID_ENDPOINT + encodeURIComponent( pageName ) )
+                        .then( function ( data ) { return data; } ); // truncate to first argument, which is the data
                 } );
                 recursiveCalls = $.when.apply( $, deferreds ).then( function () {
                     var results = arguments; // use keyword "arguments" to access deferred results
                     var deferreds2 = [];
+                    if( pageNames.length !== results.length ) {
+                        console.error(pageNames,results);
+                        throw new Error( "pageNames.length !== results.length: " + pageNames.length + " " + results.length );
+                    }
                     for( var i = 0; i < pageNames.length; i++ ) {
                         deferreds2.push( findSection( pageNames[i], results[i], sigLinkElem ) );
                     }
                     return $.when.apply( $, deferreds2 ).then( function () {
                         var results2 = Array.prototype.slice.call( arguments );
-                        results2 = results2.filter( Boolean ); // filter out nulls
-                        console.log("results2 ",results2);
-                        if( results2.length === 0 ) {
+                        var namesAndResults2 = [];
+                        if( pageNames.length !== results2.length ) {
+                            throw new Error( "pageNames.length !== results2.length: " + pageNames.length + " " + results2.length );
+                        }
+                        for( var i = 0; i < pageNames.length; i++ ) {
+                            if( results2[i] ) {
+                                namesAndResults2.push( [ pageNames[i], results2[i] ] );
+                            }
+                        }
+                        if( namesAndResults2.length === 0 ) {
                             return null;
-                        } else if( results2.length === 1 ) {
-                            return results2[0];
+                        } else if( namesAndResults2.length === 1 ) {
+                            return namesAndResults2[0][1];
                         } else {
-                            console.error("WTF");
+                            var allSameName = namesAndResults2.every( function ( nameAndResult ) {
+                                return nameAndResult[0] === namesAndResults2[0][0];
+                            } );
+                            if( allSameName ) {
+                                return namesAndResults2[0][1];
+                            } else {
+                                console.error( "WTF", namesAndResults2 );
+                            }
                         }
                     } );
                 } );
@@ -990,6 +1009,14 @@ function loadReplyLink( $, mw ) {
         return recursiveCalls.then( function ( data ) {
             if( data ) {
                 return data;
+            } else if( nearestHeader === null ) {
+                return {
+                    page: targetPage,
+                    sectionName: "",
+                    sectionDupeIdx: 0,
+                    sectionLevel: 0,
+                    nearbyMwId: corrCmt.id
+                };
             } else {
 
                 // We tried recursing, and it didn't work, so the
@@ -998,17 +1025,11 @@ function loadReplyLink( $, mw ) {
 
                 // Finally, get the index of our nearest header
                 var allHeaders = iterableToList( psdDom.querySelectorAll( HEADER_SELECTOR ) );
-                var headerIdx = null, headerAbout;
-                var tIdx = 0; // "header index for headers inside tsclnId"
 
-                // Note that i is incremented at the end of the loop because
-                // sometimes we want to skip an index, such as when it comes
-                // from another template
                 var sectionDupeIdx = 0;
                 for( var i = 0; i < allHeaders.length; i++ ) {
                     if( allHeaders[i].textContent === nearestHeader.textContent ) {
                         if( allHeaders[i] === nearestHeader ) {
-                            headerIdx = tIdx;
                             break;
                         } else {
                             sectionDupeIdx++;
@@ -1038,7 +1059,7 @@ function loadReplyLink( $, mw ) {
      * Performs a sanity check with the given section name.
      */
     function getSectionWikitext( wikitext, sectionName, sectionDupeIdx ) {
-        console.log("In getSectionWikitext, sectionName = >" + sectionName + "<");
+        console.log("In getSectionWikitext, sectionName = >" + sectionName + "< (wikitext.length = " + wikitext.length + ")");
         //console.log("wikitext (first 1000 chars) is " + dirtyWikitext.substring(0, 1000));
 
         // There are certain locations where a header may appear in the
@@ -1072,6 +1093,7 @@ function loadReplyLink( $, mw ) {
 
         if( sectionName === "" ) {
             // Getting first section
+            startIdx = 0;
             lookingForEnd = true;
         }
 
@@ -1104,16 +1126,19 @@ function loadReplyLink( $, mw ) {
                 }
 
                 //console.log("Header " + headerCounter + " (idx " + headerMatch.index + "): >" + headerMatch[0].trim() + "<");
-                if( wikitextHeaderEqualsDomHeader( /* wikitext */ headerMatch[2], /* dom */ sectionName ) ) {
+                // Note that if the lookingForEnd block were second,
+                // then two consecutive matching section headers might
+                // result in the wrong section being matched!
+                if( lookingForEnd ) {
+                    endIdx = headerMatch.index;
+                    break;
+                } else if( wikitextHeaderEqualsDomHeader( /* wikitext */ headerMatch[2], /* dom */ sectionName ) ) {
                     if( dupeCount === sectionDupeIdx ) {
                         startIdx = headerMatch.index;
                         lookingForEnd = true;
                     } else {
                         dupeCount++;
                     }
-                } else if( lookingForEnd ) {
-                    endIdx = headerMatch.index;
-                    break;
                 }
             }
             headerCounter++;
@@ -1700,7 +1725,7 @@ function loadReplyLink( $, mw ) {
 
                 // If the current section header text indicates an edit request,
                 // offer to mark it as answered
-                if( EDIT_REQ_REGEX.test( ourMetadata[1][1] ) ) {
+                if( ourMetadata[1] && EDIT_REQ_REGEX.test( ourMetadata[1][1] ) ) {
                     newOption( "reply-link-option-edit-req", "Mark edit request as answered?", false );
                 }
 
