@@ -235,6 +235,7 @@ function loadReplyLink( $, mw ) {
             .replace( /\{\{\s*[Uu]\s*\|\s*(.+?)\s*\}\}/g, "$1" )
             .replace( /('''?)(.+?)\1/g, "$2" )
             .replace( /<s>(.+?)<\/s>/g, "$1" )
+            .replace( /<big>(.+?)<\/big>/g, "$1" )
             .replace( /<span.*?>(.*?)<\/span>/g, "$1" );
     }
 
