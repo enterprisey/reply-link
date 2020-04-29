@@ -511,15 +511,28 @@ function loadReplyLink( $, mw ) {
         if( recordPath === undefined ) recordPath = false;
         var path = [];
         var lcTag;
+        var headerRegex = /h\d+/i;
+
+        function hasHeaderAsAnyPreviousSibling( node ) {
+            do {
+                if( headerRegex.test( node.tagName ) ) {
+                    return true;
+                }
+                node = node.previousElementSibling;
+            } while( node );
+        }
+
         function isActualContainer( node, nodeLcTag ) {
             if( nodeLcTag === undefined ) nodeLcTag = node.tagName.toLowerCase();
             return /dd|li/.test( nodeLcTag ) ||
                     ( ( nodeLcTag === "p" || nodeLcTag === "div" ) &&
                         ( node.parentNode.className === "mw-parser-output" ||
+                            hasHeaderAsAnyPreviousSibling( node ) ||
                             node.parentNode.className === "hover-edit-section" ||
                             ( node.parentNode.tagName.toLowerCase() === "section" &&
                                 node.parentNode.dataset.mwSectionId ) ) );
         }
+
         var smallContainerNodeLimit = live ? 3 : 1;
         do {
             currNode = currNode.parentNode;
