@@ -5,7 +5,48 @@ function loadReplyLink( $, mw ) {
     var EDIT_REQ_REGEX = /^((Semi|Template|Extended-confirmed)-p|P)rotected edit request on \d\d? \w+ \d{4}/;
     var EDIT_REQ_TPL_REGEX = /\{\{edit (template|fully|extended|semi)-protected\s*(\|.+?)*\}\}/;
     var LITERAL_SIGNATURE = "~~" + "~~"; // split up because it might get processed
-    var ADVERT = " (using [[w:en:User:Enterprisey/reply-link|reply-link]])";
+    var i18n = {
+        "en": {
+            "rl-advert": " (using [[w:en:User:Enterprisey/reply-link|reply-link]])",
+            "rl-error-status": "There was an error while replying! Please leave a note at " +
+                "<a href='https://en.wikipedia.org/wiki/User_talk:Enterprisey/reply-link'>the script's talk page</a>" +
+                " with any errors in <a href='https://en.wikipedia.org/wiki/WP:JSERROR'>the browser console</a>, if possible.",
+            "rl-replying-to": "Replying to ",
+            "rl-reloading": "automatically reloading",
+            "rl-reload": "Reload",
+            "rl-saved": "Reply saved!",
+            "rl-cancel": "cancel ",
+            "rl-placeholder": "Reply here!",
+            "rl-reply": "Reply",
+            "rl-preview": "Preview",
+            "rl-cancel-button": "Cancel",
+            "rl-started-reply": "You've started a reply but haven't posted it",
+            "rl-loading": "Loading...",
+            "rl-reply-label": "reply",
+            "rl-to-label": " to ",
+            "rl-auto-indent": "Automatically indent?"
+        },
+        "pt": {
+            "rl-advert": "(usando [[w:en:User:Enterprisey/reply-link|reply-link]])",
+            "rl-error-status": "Ocorreu um erro ao responder! Por favor deixe um comentário na " +
+                "<a href='https://en.wikipedia.org/wiki/User_talk:Enterprisey/reply-link'>página de discussão do script</a>" +
+                " informando os erros que apareçam <a href='https://en.wikipedia.org/wiki/WP:JSERROR'>no console do navegador</a>, se possível.",
+            "rl-replying-to": "Respondendo a ",
+            "rl-reloading": "recarregando automaticamente",
+            "rl-reload": "Recarregar",
+            "rl-saved": "Resposta publicada!",
+            "rl-cancel": "cancelar ",
+            "rl-placeholder": "Responda aqui!",
+            "rl-reply": "Responder",
+            "rl-preview": "Prever",
+            "rl-cancel-button": "Cancelar",
+            "rl-started-reply": "Você começou a responder, mas não publicou sua resposta",
+            "rl-loading": "Carregando...",
+            "rl-reply-label": "responder",
+            "rl-to-label": " a ",
+            "rl-auto-indent": "Indentar automaticamente?"
+        }
+    };
     var PARSOID_ENDPOINT = "https:" + mw.config.get( "wgServer" ) + "/api/rest_v1/page/html/";
     var HEADER_SELECTOR = "h1,h2,h3,h4,h5,h6";
     var MAX_UNICODE_DECIMAL = 1114111;
@@ -210,9 +251,7 @@ function loadReplyLink( $, mw ) {
      */
     function setStatusError( e ) {
         console.error(e);
-        setStatus( "There was an error while replying! Please leave a note at " +
-            "<a href='https://en.wikipedia.org/wiki/User_talk:Enterprisey/reply-link'>the script's talk page</a>" +
-            " with any errors in <a href='https://en.wikipedia.org/wiki/WP:JSERROR'>the browser console</a>, if possible." );
+        setStatus( mw.msg( "rl-error-status" ) );
         if( e.message ) {
             console.log( "Content request error: " + JSON.stringify( e.message ) );
         }
@@ -1552,7 +1591,7 @@ function loadReplyLink( $, mw ) {
                     sectionWikitext );
 
             // Build summary
-            var defaultSummmary = "Replying to " +
+            var defaultSummmary = mw.msg( "rl-replying-to" ) +
                 ( rplyToXfdNom ? xfdType + " nomination by " : "" ) +
                 cmtAuthorWktxt +
                 ( markedEditReq ? " and marking edit request as answered" : "" );
@@ -1561,7 +1600,7 @@ function loadReplyLink( $, mw ) {
             if( window.replyLinkCustomSummary && customSummaryField.value ) {
                 summaryCore = customSummaryField.value.trim();
             }
-            var summary = "/* " + sectionHeader + " */ " + summaryCore + ADVERT;
+            var summary = "/* " + sectionHeader + " */ " + summaryCore + mw.msg( "rl-advert" );
 
             // Send another request, this time to actually edit the
             // page
@@ -1586,9 +1625,9 @@ function loadReplyLink( $, mw ) {
                     var needPurge = findSectionResult.page !== currentPageName;
 
                     function finishReply( _ ) {
-                        var reloadHtml = window.replyLinkAutoReload ? "automatically reloading"
-                            : "<a href='javascript:window.replyLinkReload()' class='reply-link-reload'>Reload</a>";
-                        setStatus( "Reply saved! (" + reloadHtml + ")" );
+                        var reloadHtml = window.replyLinkAutoReload ? mw.msg( "rl-reloading" )
+                            : "<a href='javascript:window.replyLinkReload()' class='reply-link-reload'>" + mw.msg( "rl-reload" ) + "</a>";
+                        setStatus( mw.msg( "rl-saved" ) + " (" + reloadHtml + ")" );
 
                         // Required to permit reload to happen, checked in onbeforeunload
                         replyWasSaved = true;
@@ -1665,7 +1704,7 @@ function loadReplyLink( $, mw ) {
                 if( newLink.textContent === linkLabel ) {
 
                     // Disable this link
-                    newLink.textContent = "cancel " + linkLabel;
+                    newLink.textContent = mw.msg( "rl-cancel" ) + linkLabel;
                 } else {
 
                     // We've already cancelled the reply
@@ -1689,17 +1728,17 @@ function loadReplyLink( $, mw ) {
                 var panelEl = document.createElement( "div" );
                 panelEl.id = "reply-link-panel";
                 panelEl.innerHTML = "<textarea id='reply-dialog-field' class='mw-ui-input'" +
-                    " placeholder='Reply here!'></textarea>" +
+                    " placeholder='" + mw.msg( "rl-placeholder" ) + "'></textarea>" +
                     ( window.replyLinkCustomSummary ? "<label for='reply-link-summary'>Summary: </label>" +
                         "<input id='reply-link-summary' class='mw-ui-input' placeholder='Edit summary' " +
                         "value='Replying to " + cmtAuthor.replace( /'/g, "&#39;" ) + "'/><br />" : "" ) +
                     "<table style='border-collapse:collapse'><tr><td id='reply-link-buttons' style='width: " +
                     ( window.replyLinkPreloadPing === "button" ? "325" : "255" ) + "px'>" +
-                    "<button id='reply-dialog-button' class='mw-ui-button mw-ui-progressive'>Reply</button> " +
-                    "<button id='reply-link-preview-button' class='mw-ui-button'>Preview</button>" +
+                    "<button id='reply-dialog-button' class='mw-ui-button mw-ui-progressive'>" + mw.msg( "rl-reply" ) + "</button> " +
+                    "<button id='reply-link-preview-button' class='mw-ui-button'>" + mw.msg( "rl-preview" ) + "</button>" +
                     ( window.replyLinkPreloadPing === "button" ?
                         " <button id='reply-link-ping-button' class='mw-ui-button'>Ping</button>" : "" ) +
-                    "<button id='reply-link-cancel-button' class='mw-ui-button mw-ui-quiet mw-ui-destructive'>Cancel</button></td>" +
+                    "<button id='reply-link-cancel-button' class='mw-ui-button mw-ui-quiet mw-ui-destructive'>" + mw.msg( "rl-cancel-button" ) + "</button></td>" +
                     "<td id='reply-dialog-status'></span><div style='clear:left'></td></tr></table>" +
                     "<div id='reply-link-options' class='gone-on-empty' style='margin-top: 0.5em'></div>" +
                     "<div id='reply-link-preview' class='gone-on-empty' style='border: thin dashed gray; padding: 0.5em; margin-top: 0.5em'></div>";
@@ -1750,7 +1789,7 @@ function loadReplyLink( $, mw ) {
                 }
 
                 if( window.replyLinkAutoIndentation === "checkbox" ) {
-                    newOption( "reply-link-option-auto-indent", "Automatically indent?", true );
+                    newOption( "reply-link-option-auto-indent", mw.msg( "rl-auto-indent" ), true );
                 }
 
                 /* Commented out because I could never get it to work
@@ -1773,7 +1812,7 @@ function loadReplyLink( $, mw ) {
                     if( !replyWasSaved &&
                             document.getElementById( "reply-dialog-field" ) &&
                             document.getElementById( "reply-dialog-field" ).value ) {
-                        var txt = "You've started a reply but haven't posted it";
+                        var txt = mw.msg( "rl-started-reply" );
                         e.returnValue = txt;
                         return txt;
                     }
@@ -1787,7 +1826,7 @@ function loadReplyLink( $, mw ) {
                     document.getElementById( "reply-dialog-field" ).style["background-image"] =
                         "url(" + window.replyLinkPendingImageUrl + ")";
                     document.querySelector( "#reply-link-buttons button" ).disabled = true;
-                    setStatus( "Loading..." );
+                    setStatus( mw.msg( "rl-loading" ) );
 
                     var parsoidUrl = PARSOID_ENDPOINT + encodeURIComponent( currentPageName ) +
                             "/" + mw.config.get( "wgCurRevisionId" ),
@@ -1922,7 +1961,7 @@ function loadReplyLink( $, mw ) {
         }
 
         // Choose link label: if we're replying to an XfD, customize it
-        var linkLabel = "reply" + ( rplyToXfdNom ? " to " + xfdType : "" );
+        var linkLabel = mw.msg( "rl-reply-label" ) + ( rplyToXfdNom ? mw.msg( "rl-to-label" ) + xfdType : "" );
 
         // Construct new link
         var newLinkWrapper = document.createElement( "span" );
@@ -2197,6 +2236,11 @@ function loadReplyLink( $, mw ) {
     }
 
     function onReady() {
+        var lang_code = mw.config.get( "wgUserLanguage" )
+        // Replace default English interface by translation if available
+        var interface_messages = $.extend( {}, i18n.en, i18n[ lang_code.split('-')[0] ], i18n[ lang_code ] );
+        // Define interface messages
+        mw.messages.set( interface_messages );
 
         // Exit if history page or edit page
         if( mw.config.get( "wgAction" ) === "history" ) return;
