@@ -128,7 +128,8 @@ function loadReplyLink( $, mw ) {
      * /includes/parser/Sanitizer.php
      */
     function deArmorFrenchSpaces( text ) {
-        return text.replace( /\xA0([?:;!%»›])/g, " $1" );
+        return text.replace( /\xA0([?:;!%»›])/g, " $1" )
+            .replace( /([«‹])\xA0/g, "$1 " );
     }
 
     /**
@@ -671,7 +672,9 @@ function loadReplyLink( $, mw ) {
                 }
             }
         }
-        newHref = newHref.replace( /\\/g, "\\\\" ).replace( /'/g, "\\'" );
+        newHref = newHref.replace( /\\/g, "\\\\" )
+            .replace( /'/g, "\\'" )
+            .replace( /\?/g, "%3F" );
         var livePath = ascendToCommentContainer( sigLinkElem, /* live */ true, /* recordPath */ true );
         corrCmtDebug.newHref = newHref; corrCmtDebug.livePath = livePath;
 
@@ -2014,10 +2017,13 @@ function loadReplyLink( $, mw ) {
                 // having normal text afterwards, which is rejected (because
                 // that means someone put a timestamp in the middle of a
                 // paragraph)
+                var hasLinkAfterwardsNotInBlockEl = node.nextElementSibling &&
+                    ( node.nextElementSibling.tagName.toLowerCase() === "a" ||
+                        ( node.nextElementSibling.tagName.match( /^(span|small)$/i ) &&
+                            node.nextElementSibling.querySelector( "a" ) ) );
                 if( TIMESTAMP_REGEX.test( node.textContent ) &&
                         ( node.previousSibling || isSmall ) &&
-                        ( !node.nextElementSibling ||
-                            node.nextElementSibling.tagName.toLowerCase() !== "a" ) ) {
+                        !hasLinkAfterwardsNotInBlockEl ) {
                     linkId = "reply-link-" + idNum;
                     attachLinkAfterNode( node, linkId, !!currIndentation );
                     idNum++;
