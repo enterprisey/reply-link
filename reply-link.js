@@ -1305,7 +1305,7 @@ function loadReplyLink( $, mw ) {
         // number of the line in sectionWikitext that'll be right after reply
         var replyLine = 0;
 
-        var INDENT_RE = /^[:\*#]+/;
+        var INDENT_RE = /^[:*#]+/;
         if( slicedSecWikitext.trim().length > 0 ) {
             var currIndentation, currIndentationLvl, i;
 
@@ -2158,20 +2158,21 @@ function loadReplyLink( $, mw ) {
                         cmtAuthor = cmtAuthorAndLink.username,
                         cmtLink = cmtAuthorAndLink.link;
                     var ourMetadata = metadata[ wrapper.children[0].id ];
-                    var findSectionResult = findSection( currentPageName, parsoidDomString, cmtLink );
-
-                    getWikitext( findSectionResult.page, /* useCaching */ true ).then( function ( revObj ) {
-                            doReply( ourMetadata[0], ourMetadata[1], ourMetadata[2],
-                                    cmtAuthor, false, revObj, findSectionResult ).done( function () {
-                                        wrapper.style.background = "green";
-                                        successes++;
-                                    } ).fail( function () {
-                                        wrapper.style.background = "red";
-                                        failures++;
-                                    } );
-                    }, function ( e ) {
-                        wrapper.style.background = "red";
-                        failures++;
+                    findSection( currentPageName, parsoidDomString, cmtLink ).then( function ( findSectionResult ) {
+                        var revObjPromise = getWikitext( findSectionResult.page, /* useCaching */ true );
+                        $.when( findSectionResult, revObjPromise ).then( function ( findSectionResult, revObj ) {
+                                doReply( ourMetadata[0], ourMetadata[1], ourMetadata[2],
+                                        cmtAuthor, false, revObj, findSectionResult ).done( function () {
+                                            wrapper.style.background = "green";
+                                            successes++;
+                                        } ).fail( function () {
+                                            wrapper.style.background = "red";
+                                            failures++;
+                                        } );
+                        }, function ( e ) {
+                            wrapper.style.background = "red";
+                            failures++;
+                        } );
                     } );
                 } catch ( e ) {
                     console.error( e );
