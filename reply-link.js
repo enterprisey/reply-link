@@ -1939,7 +1939,7 @@ function loadReplyLink( $, mw ) {
         var parent = node;
         do {
             parent = parent.parentNode;
-        } while( !( /^(p|dd|li|div)$/.test( parent.tagName.toLowerCase() ) ) );
+        } while( !( /^(p|dd|li|div|td)$/.test( parent.tagName.toLowerCase() ) ) );
 
         // Determine whether we're replying to an XfD nom
         var rplyToXfdNom = false;
@@ -2077,11 +2077,6 @@ function loadReplyLink( $, mw ) {
                     case "dl": newIndentSymbol = ":"; break;
                     case "ul": newIndentSymbol = "*"; break;
                     case "ol": newIndentSymbol = "#"; break;
-                    case "table":
-                        if( node.className.indexOf( "mw-collapsible" ) < 0 ) {
-                            continue;
-                        }
-                        break;
                     case "div":
                         if( node.className.indexOf( "xfd_relist" ) >= 0 ) {
                             continue;
@@ -2164,7 +2159,8 @@ function loadReplyLink( $, mw ) {
         // Disable links inside hatnotes, archived discussions
         var badRegionsSelector = [
             "div.archived",
-            "div.resolved"
+            "div.resolved",
+            "table"
             ].map( function ( s ) { return s + " .reply-link-wrapper" } ).join( "," );
         var insideArchived = mainContent.querySelectorAll( badRegionsSelector );
         for( var i = 0; i < insideArchived.length; i++ ) {
