@@ -368,7 +368,7 @@ function loadReplyLink( $, mw ) {
         userspcLinkRgx = {};
         userspcLinkRgx.spc = "(?:" + nsRgxFragments.join( "|" ).replace( /_/g, " " ) + ")";
         userspcLinkRgx.und = userspcLinkRgx.spc.replace( / /g, "_" );
-        userspcLinkRgx.both = "(?:" + userspcLinkRgx.spc + "|" + userspcLinkRgx.und + ")";
+        userspcLinkRgx.both = userspcLinkRgx.spc.replace( / /g, "(?: |_)" );
     }
 
     /**
