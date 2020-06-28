@@ -65,6 +65,7 @@ function loadReplyLink( $, mw ) {
     // Date format regexes in signatures (i.e. the "default date format")
     var DATE_FMT_RGX = {
         "//en.wikipedia.org": /\d\d:\d\d,\s\d{1,2}\s\w+?\s\d{4}/.source,
+        "//simple.wikipedia.org": /\d\d:\d\d,\s\d{1,2}\s\w+?\s\d{4}/.source,
         "//en.wikisource.org": /\d\d:\d\d,\s\d{1,2}\s\w+?\s\d{4}/.source,
         "//pt.wikipedia.org": /\d\dh\d\dmin\sde \d{1,2} de \w+? de \d{4}/.source
     }
