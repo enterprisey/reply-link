@@ -65,6 +65,7 @@ function loadReplyLink( $, mw ) {
     // Date format regexes in signatures (i.e. the "default date format")
     var DATE_FMT_RGX = {
         "//en.wikipedia.org": /\d\d:\d\d,\s\d{1,2}\s\w+?\s\d{4}/.source,
+        "//simple.wikipedia.org": /\d\d:\d\d,\s\d{1,2}\s\w+?\s\d{4}/.source,
         "//en.wikisource.org": /\d\d:\d\d,\s\d{1,2}\s\w+?\s\d{4}/.source,
         "//pt.wikipedia.org": /\d\dh\d\dmin\sde \d{1,2} de \w+? de \d{4}/.source
     }
@@ -146,6 +147,19 @@ function loadReplyLink( $, mw ) {
      * Cache for getWikitext. Only useful in test mode.
      */
     var getWikitextCache = {};
+
+    // Polyfill from https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/includes
+    if( !String.prototype.includes ) {
+        String.prototype.includes = function( search, start ) {
+            if( search instanceof RegExp ) {
+                throw TypeError('first argument must not be a RegExp');
+            }
+            if( start === undefined ) {
+                start = 0;
+            }
+            return this.indexOf( search, start ) !== -1;
+        };
+    }
 
     /**
      * Get the formatted namespace name for a namespace ID.
@@ -367,7 +381,7 @@ function loadReplyLink( $, mw ) {
         userspcLinkRgx = {};
         userspcLinkRgx.spc = "(?:" + nsRgxFragments.join( "|" ).replace( /_/g, " " ) + ")";
         userspcLinkRgx.und = userspcLinkRgx.spc.replace( / /g, "_" );
-        userspcLinkRgx.both = "(?:" + userspcLinkRgx.spc + "|" + userspcLinkRgx.und + ")";
+        userspcLinkRgx.both = userspcLinkRgx.spc.replace( / /g, "(?: |_)" );
     }
 
     /**
@@ -377,11 +391,11 @@ function loadReplyLink( $, mw ) {
     function hasSig( text ) {
 
         // no literal signature?
-        if( text.indexOf( LITERAL_SIGNATURE ) < 0 ) return false;
+        if( !text.includes( LITERAL_SIGNATURE ) ) return false;
 
         // if there's a literal signature and no nowiki elements,
         // there must be a real signature
-        if( text.indexOf( "<nowiki>" ) < 0 ) return true;
+        if( !text.includes( "<nowiki>" ) ) return true;
 
         // Save all nowiki spans
         var nowikiSpanStarts = []; // list of ignored span beginnings
@@ -452,7 +466,7 @@ function loadReplyLink( $, mw ) {
             //console.log(i,"top of outer for in findUsernameInElem ",el, " links -> ",links);
 
             // Compatibility with "Comments in Local Time"
-            if( el.className.indexOf( "localcomments" ) >= 0 ) i--;
+            if( el.className.includes( "localcomments" ) ) i--;
 
             // If we couldn't get any links, try again with prev elem
             if( !links ) continue;
@@ -462,7 +476,7 @@ function loadReplyLink( $, mw ) {
                 link = links[j];
 
                 //console.log(link,decodeURIComponent(link.getAttribute("href")));
-                if( link.className.indexOf( "mw-selflink" ) >= 0 ) {
+                if( link.className.includes( "mw-selflink" ) ) {
                     return { username: currentPageName.replace( /.+:/, "" )
                         .replace( /_/g, " " ), link: link };
                 }
@@ -656,7 +670,7 @@ function loadReplyLink( $, mw ) {
             }
             var i, autosignedIdx, autosigned = container.querySelector( "small.autosigned" );
             if( autosigned && ( autosignedIdx = iterableToList(
-                    container.childNodes ).indexOf( autosigned ) ) >= 0 ) {
+                    container.childNodes ).includes( autosigned ) ) ) {
                 i = autosignedIdx;
             } else {
                 var childNodes = container.childNodes;
@@ -686,7 +700,7 @@ function loadReplyLink( $, mw ) {
         // Convert live href to psd href (aka newHref)
         var newHref, liveHref = decodeURIComponent( sigLinkElem.getAttribute( "href" ) );
         corrCmtDebug.liveHref = liveHref;
-        if( sigLinkElem.className.indexOf( "mw-selflink" ) >= 0 ) {
+        if( sigLinkElem.className.includes( "mw-selflink" ) ) {
             newHref = "./" + currentPageName;
         } else {
             if( /^\/wiki/.test( liveHref ) ) {
@@ -1950,7 +1964,7 @@ function loadReplyLink( $, mw ) {
         var parent = node;
         do {
             parent = parent.parentNode;
-        } while( !( /^(p|dd|li|div)$/.test( parent.tagName.toLowerCase() ) ) );
+        } while( !( /^(p|dd|li|div|td)$/.test( parent.tagName.toLowerCase() ) ) );
 
         // Determine whether we're replying to an XfD nom
         var rplyToXfdNom = false;
@@ -2048,7 +2062,7 @@ function loadReplyLink( $, mw ) {
             // Compatibility with "Comments in Local Time"
             var isLocalCommentsSpan = node.nodeType === 1 &&
                 "span" === node.tagName.toLowerCase() &&
-                node.className.indexOf( "localcomments" ) >= 0;
+                node.className.includes( "localcomments" );
 
             var isSmall = node.nodeType === 1 && (
                     node.tagName.toLowerCase() === "small" ||
@@ -2057,7 +2071,7 @@ function loadReplyLink( $, mw ) {
 
             // Small nodes are okay, unless they're delsort notices
             var isOkSmallNode = isSmall &&
-                node.className.indexOf( "delsort-notice" ) < 0;
+                !node.className.includes( "delsort-notice" );
 
             if( ( node.nodeType === 3 ) ||
                     isOkSmallNode ||
@@ -2088,13 +2102,8 @@ function loadReplyLink( $, mw ) {
                     case "dl": newIndentSymbol = ":"; break;
                     case "ul": newIndentSymbol = "*"; break;
                     case "ol": newIndentSymbol = "#"; break;
-                    case "table":
-                        if( node.className.indexOf( "mw-collapsible" ) < 0 ) {
-                            continue;
-                        }
-                        break;
                     case "div":
-                        if( node.className.indexOf( "xfd_relist" ) >= 0 ) {
+                        if( node.className.includes( "xfd_relist" ) ) {
                             continue;
                         }
                         break;
@@ -2134,13 +2143,12 @@ function loadReplyLink( $, mw ) {
                 // MW buries the text in a span inside the header
                 var headlineEl = null;
                 if( currHeaderEl.childNodes[0].className &&
-                    currHeaderEl.childNodes[0].className.indexOf( "mw-headline" ) >= 0 ) {
+                    currHeaderEl.childNodes[0].className.includes( "mw-headline" ) ) {
                     headlineEl = currHeaderEl.childNodes[0];
                 } else {
                     for( var i = 0; i < currHeaderEl.childNodes.length; i++ ) {
                         if( currHeaderEl.childNodes[i].className &&
-                                currHeaderEl.childNodes[i].className
-                                .indexOf( "mw-headline" ) >= 0 ) {
+                                currHeaderEl.childNodes[i].className.includes( "mw-headline" ) ) {
                             headlineEl = currHeaderEl.childNodes[i];
                             break;
                         }
@@ -2175,7 +2183,8 @@ function loadReplyLink( $, mw ) {
         // Disable links inside hatnotes, archived discussions
         var badRegionsSelector = [
             "div.archived",
-            "div.resolved"
+            "div.resolved",
+            "table"
             ].map( function ( s ) { return s + " .reply-link-wrapper" } ).join( "," );
         var insideArchived = mainContent.querySelectorAll( badRegionsSelector );
         for( var i = 0; i < insideArchived.length; i++ ) {

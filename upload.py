@@ -26,6 +26,8 @@ def get_branch_and_hash():
     except AttributeError:
         branch = next(x for x in repo.branches if x.name == repo.active_branch)
         sha1 = branch.commit.id
+    except:
+        return "unknown", "unknown"
     return branch, sha1
 
 
