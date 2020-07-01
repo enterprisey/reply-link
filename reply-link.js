@@ -789,14 +789,9 @@ function loadReplyLink( $, mw ) {
 
         var adminMarksClass = liveClone.querySelectorAll( "b.adminMark" );
         if ( adminMarksClass.length > 0 ) {
-            console.log('markAdminsClass.length = ' + adminMarksClass.length);
-            adminMarksClass.forEach(function(currentValue, currentIndex, listObj) { 
-                console.log(currentValue + ', ' + currentIndex + ', ' + this); 
-            },'x');
-            console.log('adminMarksClass.toString() = ' + adminMarksClass.toString())
-            adminMarksClass.forEach(function(currentValue, currentIndex, listObj){
-                currentValue.parentNode.removeChild(currentValue);
-            })
+            adminMarksClass.forEach( function ( currentValue, currentIndex, listObj ) {
+                currentValue.parentNode.removeChild( currentValue );
+            } );
         }
                       
         // TODO: Optimization - surrTextContentFromElem does the prefixing
