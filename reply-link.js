@@ -787,6 +787,13 @@ function loadReplyLink( $, mw ) {
             teahouseTalkbackLink.parentNode.removeChild( teahouseTalkbackLink );
         }
 
+        var adminMarksClass = liveClone.querySelectorAll( "b.adminMark" );
+        if ( adminMarksClass.length > 0 ) {
+            adminMarksClass.forEach( function ( currentValue, currentIndex, listObj ) {
+                currentValue.parentNode.removeChild( currentValue );
+            } );
+        }
+                      
         // TODO: Optimization - surrTextContentFromElem does the prefixing
         // operation a second time, even though we already called onlyFirstComment
         // on it.
