@@ -2020,7 +2020,7 @@ function loadReplyLink( $, mw ) {
         // Find the index of the first header in contentEls
         var headerIndex = 0;
         for( headerIndex = 0; headerIndex < contentEls.length; headerIndex++ ) {
-            if( contentEls[ headerIndex ].tagName.toLowerCase().startsWith( "h" ) ) break;
+            if( contentEls[ headerIndex ].matches( HEADER_SELECTOR ) ) break;
         }
 
         // If we didn't find any headers at all, that's a problem and we
@@ -2176,14 +2176,15 @@ function loadReplyLink( $, mw ) {
         //console.log(metadata);
 
         // Disable links inside hatnotes, archived discussions
-        var badRegionsSelector = [
-            "div.archived",
-            "div.resolved",
-            "table"
-            ].map( function ( s ) { return s + " .reply-link-wrapper" } ).join( "," );
-        var insideArchived = mainContent.querySelectorAll( badRegionsSelector );
-        for( var i = 0; i < insideArchived.length; i++ ) {
-            insideArchived[i].parentNode.removeChild( insideArchived[i] );
+        var badRegionsSelector = "div.archived,div.resolved,table";
+        var badRegions = mainContent.querySelectorAll( badRegionsSelector );
+        for( var i = 0; i < badRegions.length; i++ ) {
+            var badRegion = badRegions[i];
+            var insideArchived = badRegion.querySelectorAll( ".reply-link-wrapper" );
+            console.log(insideArchived);
+            for( var j = 0; j < insideArchived.length; j++ ) {
+                insideArchived[j].parentNode.removeChild( insideArchived[j] );
+            }
         }
     }
 
