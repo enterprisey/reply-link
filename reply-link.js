@@ -2265,9 +2265,10 @@ function loadReplyLink( $, mw ) {
         // Define interface messages
         mw.messages.set( interface_messages );
 
-        // Exit if history page or edit page
+        // Exit if history page or edit page or oldid
         if( mw.config.get( "wgAction" ) === "history" ) return;
         if( document.getElementById( "editform" ) ) return;
+        if( window.location.search.includes( "oldid=" ) ) return;
 
         api = new mw.Api();
 
