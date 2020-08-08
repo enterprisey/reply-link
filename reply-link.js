@@ -316,6 +316,11 @@ function loadReplyLink( $, mw ) {
         if( !candidates.length ) return null;
         var candidate = candidates[candidates.length-1].parentElement.parentElement;
 
+        // Compatibility with User:Kephir/gadgets/unclutter.js
+        if( candidate.className.includes( "kephir-unclutter-discussion-wrapper" ) ) {
+            candidate = candidate.parentElement;
+        }
+
         // Compatibility with User:Enterprisey/hover-edit-section
         // That script puts each section in its own div, so we need to
         // go out another level if it's running
