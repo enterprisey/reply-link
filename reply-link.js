@@ -631,7 +631,8 @@ function loadReplyLink( $, mw ) {
             //console.log(node,node.textContent.trim(),TIMESTAMP_REGEX.test(node.textContent.trim()));
             var validTag = node.nodeType === 3 || ( node.nodeType === 1 &&
                             ( node.tagName.toLowerCase() === "small" ||
-                                node.tagName.toLowerCase() === "span" ) );
+                                node.tagName.toLowerCase() === "span" ||
+                                node.tagName.toLowerCase() === "p" ) );
             return ( validTag && TIMESTAMP_REGEX.test( node.textContent.trim() ) ||
                    ( node.childNodes.length === 1 &&
                         TIMESTAMP_REGEX.test( node.childNodes[0].textContent.trim() ) ) );
