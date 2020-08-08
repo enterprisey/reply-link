@@ -753,6 +753,33 @@ function loadReplyLink( $, mw ) {
             n.parentNode.removeChild( n );
         } );
 
+        // User:Kephir/gadgets/unclutter.js compatibility
+        var unclutterContainer = liveClone.querySelector( ".kephir-unclutter-minisig" );
+        if( unclutterContainer ) {
+
+            // remove wrapping whitespace
+            if( unclutterContainer.previousSibling.nodeType !== 3 ||
+                    unclutterContainer.nextSibling.nodeType !== 3 ) {
+                throw new Error( "unclutterContainer had non-text siblings!" );
+            }
+            unclutterContainer.parentNode.removeChild( unclutterContainer.previousSibling );
+            unclutterContainer.parentNode.removeChild( unclutterContainer.nextSibling );
+
+            // Move nodes from wrapper to outside the container
+            var sigNodes = unclutterContainer.querySelector( ".kephir-unclutter-signature-wrapper" ).childNodes;
+            var numSigNodes = sigNodes.length;
+            for( var sigNodeIdx = 0; sigNodeIdx < numSigNodes; sigNodeIdx++ ) {
+
+                // We insert the node at index 0 every time because it's a live
+                // container, so as we remove nodes (via insertBefore, which
+                // moves nodes and doesn't duplicate them), the node at the
+                // front of sigNodes will change every time
+                unclutterContainer.parentNode.insertBefore( sigNodes[0], unclutterContainer );
+            }
+
+            unclutterContainer.parentNode.removeChild( unclutterContainer );
+        }
+
         //console.log("(BEFORE) liveClone",liveClone,liveClone.childNodes);
         onlyFirstComment( liveClone );
         //console.log("(AFTER) liveClone",liveClone,liveClone.childNodes);
@@ -805,6 +832,11 @@ function loadReplyLink( $, mw ) {
         }
 
         liveTextContent = normalizeTextContent( liveTextContent );
+
+        // User:Kephir/gadgets/unclutter.js compatibility
+        livePath = livePath.filter( function ( node ) {
+            return !node.className.startsWith( "kephir" );
+        } );
 
         var selector = livePath.map( function ( node ) {
             return node.tagName.toLowerCase();
@@ -904,6 +936,7 @@ function loadReplyLink( $, mw ) {
 
         var corrLink = getCorrCmt( psdDom, sigLinkElem );
         if( corrLink === null ) {
+            console.error( "corrLink === null" );
             return $.when();
         }
         //console.log("STEP 1 SUCCESS",corrLink);
