@@ -67,7 +67,8 @@ function loadReplyLink( $, mw ) {
         "//en.wikipedia.org": /\d\d:\d\d,\s\d{1,2}\s\w+?\s\d{4}/.source,
         "//simple.wikipedia.org": /\d\d:\d\d,\s\d{1,2}\s\w+?\s\d{4}/.source,
         "//en.wikisource.org": /\d\d:\d\d,\s\d{1,2}\s\w+?\s\d{4}/.source,
-        "//pt.wikipedia.org": /\d\dh\d\dmin\sde \d{1,2} de \w+? de \d{4}/.source
+        "//pt.wikipedia.org": /\d\dh\d\dmin\sde \d{1,2} de \w+? de \d{4}/.source,
+        "//commons.wikimedia.org": /\d\d:\d\d,\s\d{1,2}\s\w+?\s\d{4}/.source
     }
 
     // Shared API object
@@ -2422,4 +2423,3 @@ if( jQuery !== undefined && mediaWiki !== undefined ) {
     }
 }
 //</nowiki>
-
