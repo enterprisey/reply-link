@@ -2226,7 +2226,6 @@ function loadReplyLink( $, mw ) {
         for( var i = 0; i < badRegions.length; i++ ) {
             var badRegion = badRegions[i];
             var insideArchived = badRegion.querySelectorAll( ".reply-link-wrapper" );
-            console.log(insideArchived);
             for( var j = 0; j < insideArchived.length; j++ ) {
                 insideArchived[j].parentNode.removeChild( insideArchived[j] );
             }
