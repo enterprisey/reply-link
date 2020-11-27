@@ -24,7 +24,8 @@ function loadReplyLink( $, mw ) {
             "rl-loading": "Loading...",
             "rl-reply-label": "reply",
             "rl-to-label": " to ",
-            "rl-auto-indent": "Automatically indent?"
+            "rl-auto-indent": "Automatically indent?",
+            "rl-out-of-date": "Someone has edited this page since you started replying!",
         },
         "pt": {
             "rl-advert": "(usando [[w:en:User:Enterprisey/reply-link|reply-link]])",
@@ -50,6 +51,7 @@ function loadReplyLink( $, mw ) {
     var HEADER_SELECTOR = "h1,h2,h3,h4,h5,h6";
     var MAX_UNICODE_DECIMAL = 1114111;
     var HEADER_REGEX = /^\s*=(=*)\s*(.+?)\s*\1=\s*$/gm;
+    var JUMP_COOKIE_KEY = "reply_link_jump";
 
     // T:TDYK, used at the end of loadReplyLink
     var TTDYK = "Template:Did_you_know_nominations";
@@ -64,6 +66,7 @@ function loadReplyLink( $, mw ) {
     // Date format regexes in signatures (i.e. the "default date format")
     var DATE_FMT_RGX = {
         "//en.wikipedia.org": /\d\d:\d\d,\s\d{1,2}\s\w+?\s\d{4}/.source,
+        "//test.wikipedia.org": /\d\d:\d\d,\s\d{1,2}\s\w+?\s\d{4}/.source,
         "//simple.wikipedia.org": /\d\d:\d\d,\s\d{1,2}\s\w+?\s\d{4}/.source,
         "//en.wikisource.org": /\d\d:\d\d,\s\d{1,2}\s\w+?\s\d{4}/.source,
         "//pt.wikipedia.org": /\d\dh\d\dmin\sde \d{1,2} de \w+? de \d{4}/.source,
@@ -86,16 +89,11 @@ function loadReplyLink( $, mw ) {
     var userspcLinkRgx = null;
 
     /**
-     * This dictionary is some global state that holds three pieces of
-     * information for each "(reply)" link (keyed by their unique IDs):
+     * This dictionary is some global state that holds a dictionary
+     * for each "(reply)" link (keyed by their unique IDs):
      *
-     *  - the indentation string for the comment (e.g. ":*::")
-     *  - the header tuple for the parent section, in the form of
-     *    [level, text, number], where:
-     *      - level is 1 for a h1, 2 for a h2, etc
-     *      - text is the text between the equal signs
-     *      - number is the zero-based index of the heading from the top
-     *  - sigIdx, or the zero-based index of the signature from the top
+     *  - indentation, the indentation string for the comment (e.g. ":*::")
+     *  - sigIdx, the zero-based index of the signature from the top
      *    of the section
      *
      * This dictionary is populated in attachLinks, and unpacked in the
@@ -322,7 +320,7 @@ function loadReplyLink( $, mw ) {
         // parent will be the h2; and the parent of the h2 is the
         // content container that we want
         var candidates = document.querySelectorAll( targetHeader + " > span.mw-headline" );
-        if( !candidates.length ) return null;
+        if( !candidates.length ) return document.getElementById( "mw-content-text" );
         var candidate = candidates[candidates.length-1].parentElement.parentElement;
 
         // Compatibility with User:Kephir/gadgets/unclutter.js
@@ -355,21 +353,52 @@ function loadReplyLink( $, mw ) {
                 format: "json",
                 action: "query",
                 prop: "revisions",
-                rvprop: "content",
+                rvprop: "timestamp|content|ids",
                 rvslots: "main",
                 rvlimit: 1,
-                titles: title
+                titles: title,
+                formatversion: 2,
             }
         ).then( function ( data ) {
-            var pageId = Object.keys( data.query.pages )[0];
-            if( data.query.pages[pageId].revisions ) {
-                var revObj = data.query.pages[pageId].revisions[0];
-                var result = { timestamp: revObj.timestamp, content: revObj.slots.main["*"] };
+            if( data.query.pages[0].revisions ) {
+                var rev = data.query.pages[0].revisions[0];
+                var result = { revId: rev.revid, timestamp: rev.timestamp, content: rev.slots.main.content };
                 getWikitextCache[ title ] = result;
                 return result;
+            } else {
+                console.error( data );
+                throw new Error( "[getWikitext] bad response: " + data );
+                return {};
             }
-            return {};
         } );
+    }
+
+    function getLastRevId( title ) {
+        return $.getJSON(
+            mw.util.wikiScript( "api" ),
+            {
+                format: "json",
+                action: "query",
+                prop: "revisions",
+                rvprop: "ids",
+                rvslots: "main",
+                rvlimit: 1,
+                titles: title,
+                formatversion: 2,
+            }
+        ).then( function ( data ) {
+            return data.query.pages[0].revisions[0].revid;
+        } );
+    }
+
+    function getPathToElement( givenEl ) {
+        var path = [];
+        var currEl = givenEl;
+        while( ( currEl.id !== "mw-content-text" ) && ( currEl.tagName.toLowerCase() !== "body" ) ) {
+            path.push( iterableToList( currEl.parentNode.children ).indexOf( currEl ) );
+            currEl = currEl.parentNode;
+        }
+        return path;
     }
 
     /**
@@ -467,7 +496,7 @@ function loadReplyLink( $, mw ) {
      * object with these properties:
      *
      *  - username: The username that we found.
-     *  - link: The DOM object for the link from which we got the
+     *  - link: The DOM element for the link from which we got the
      *    username.
      */
     function findUsernameInElem( el ) {
@@ -570,233 +599,143 @@ function loadReplyLink( $, mw ) {
     }
 
     /**
-     * Ascend until dd or li, or a p directly under div.mw-parser-output.
-     * live is true if we're on the live DOM (and thus we have our own UI
-     * elements to deal with) and false if we're on the psd DOM.
+     * Given a header element, finds the title (full with namespace, spaces
+     * instead of underscores) of the page it's from.
      */
-    function ascendToCommentContainer( startNode, live, recordPath ) {
-        var currNode = startNode;
-        if( recordPath === undefined ) recordPath = false;
-        var path = [];
-        var lcTag;
-        var headerRegex = /h\d+/i;
-
-        function hasHeaderAsAnyPreviousSibling( node ) {
-            do {
-                if( headerRegex.test( node.tagName ) ) {
-                    return true;
-                }
-                node = node.previousElementSibling;
-            } while( node );
+    function pageNameOfHeader( header ) {
+        var editLinks = iterableToList( header.querySelectorAll( ".mw-editsection a" ) )
+            .filter( function ( e ) { return e.textContent.indexOf( "edit" ) === 0; } );
+        if( editLinks.length ) {
+            var encoded = editLinks[0]
+                .getAttribute( "href" )
+                .match( /title=(.+?)(?:$|&)/ )
+                [1];
+            return decodeURIComponent( encoded ).replace( /_/g, " " );
+        } else {
+            return null;
         }
-
-        function isActualContainer( node, nodeLcTag ) {
-            if( nodeLcTag === undefined ) nodeLcTag = node.tagName.toLowerCase();
-            return /dd|li/.test( nodeLcTag ) ||
-                    ( ( nodeLcTag === "p" || nodeLcTag === "div" ) &&
-                        ( node.parentNode.className === "mw-parser-output" ||
-                            hasHeaderAsAnyPreviousSibling( node ) ||
-                            node.parentNode.className === "hover-edit-section" ||
-                            ( node.parentNode.tagName.toLowerCase() === "section" &&
-                                node.parentNode.dataset.mwSectionId ) ) );
-        }
-
-        var smallContainerNodeLimit = live ? 3 : 1;
-        do {
-            currNode = currNode.parentNode;
-            lcTag = currNode.tagName.toLowerCase();
-            if( lcTag === "html" ) {
-                console.error( "ascendToCommentContainer reached root" );
-                break;
-            }
-            if( recordPath ) path.unshift( currNode );
-            //console.log( "checking isActualContainer for ", currNode, isActualContainer( currNode, lcTag ),
-            //        lcTag === "small", isActualContainer( currNode.parentNode ),
-            //            currNode.parentNode.childNodes,
-            //            currNode.parentNode.childNodes.length );
-        } while( !isActualContainer( currNode, lcTag ) &&
-            !( lcTag === "small" && isActualContainer( currNode.parentNode ) &&
-                currNode.parentNode.childNodes.length <= smallContainerNodeLimit ) );
-        //console.log("ascendToCommentContainer from ",startNode," terminating, r.v. ",recordPath?path:currNode);
-        return recordPath ? path : currNode;
     }
 
     /**
-     * Use the "edit" links in the section headers to build a list of
-     * header elements, their wikitext names, and what pages they're
-     * from. Technique developed for section-watchlist out of laziness.
+     * Finds a section in the given page's wikitext.
      */
-	function getHeadersAndSourcePages() {
-        function pageNameOfHeader( header ) {
-            var editLinks = Array.prototype.slice.call( header.querySelectorAll( "a" ) )
-                .filter( function ( e ) { return e.textContent.indexOf( "edit" ) === 0; } );
-            if( editLinks.length ) {
-                var encoded = editLinks[0]
-                    .getAttribute( "href" )
-                    .match( /title=(.+?)(?:$|&)/ )
-                    [1];
-                return decodeURIComponent( encoded ).replace( /_/g, " " );
-            } else {
-                return null;
-            }
-        }
-
-        var allHeadersArray = Array.prototype.slice.call(
-            document.querySelector( "#mw-content-text" ).querySelectorAll( "h1,h2,h3,h4,h5,h6" ) );
-        var allHeaders = allHeadersArray
+	function findSectionInPageWikitext( givenHeaderEl, pageTitle, pageWikitext ) {
+        var allHeaders = document.querySelector( "#mw-content-text" )
+            .querySelectorAll( "h1,h2,h3,h4,h5,h6" );
+        var allHeadersFromTarget = iterableToList( allHeaders )
             .filter( function ( header ) {
                 // The word "Contents" at the top of the table of contents is a heading
-                return header.getAttribute( "id" ) !== "mw-toc-heading"
-            } )
-            .map( function ( header ) {
-                return [ header, pageNameOfHeader( header ) ];
-            } )
-            .filter( function ( headerAndPage ) {
-                return headerAndPage[1] !== null
+                return ( header.getAttribute( "id" ) !== "mw-toc-heading" ) &&
+                    pageNameOfHeader( header ) === pageTitle;
             } );
-        var allTranscludedTitles = removeDuplicates( allHeaders.map( function ( header ) { return header[1]; } ) );
 
-        return api.get( {
-            action: "query",
-            prop: "revisions",
-            titles: allTranscludedTitles.join("|"),
-            rvprop: "content",
-            rvslots: "main",
-            formatversion: 2
-        } ).then( function( revData ) {
-            var headers = [];
-            for( var pageIdx = 0; pageIdx < revData.query.pages.length; pageIdx++ ) {
-                var sourceTitle = revData.query.pages[pageIdx].title;
-                var sourcePageId = revData.query.pages[pageIdx].pageid;
-                var sourceWikitext = revData.query.pages[pageIdx].revisions[0].slots.main.content;
+        // Find all the headers in the wikitext
 
-                var allHeadersFromTarget = allHeaders.filter( function ( header ) {
-                    return header[1] === sourceTitle;
-                } );
+        // Save all ignored spans
+        var ignoredSpanStarts = []; // list of ignored span beginnings
+        var ignoredSpanLengths = []; // list of ignored span lengths
+        var IGNORED_RE = /(?:<(nowiki|pre|noinclude|source)>[\s\S]*?<\/\1>)|<!--[\s\S]+?-->/g;
+        var spanMatch;
+        do {
+            spanMatch = IGNORED_RE.exec( pageWikitext );
+            if( spanMatch ) {
+                ignoredSpanStarts.push( spanMatch.index );
+                ignoredSpanLengths.push( spanMatch[0].length );
+            }
+        } while( spanMatch );
 
-                // Find all the headers in the wikitext
+        // So that we don't check every ignore span every time
+        var ignoredSpanStartIdx = 0;
 
-                // (Nowiki exclusion code copied straight from reply-link)
-                // Save all nowiki spans
-                var nowikiSpanStarts = []; // list of ignored span beginnings
-                var nowikiSpanLengths = []; // list of ignored span lengths
-                var NOWIKI_RE = /<(nowiki|pre)>[\s\S]*?<\/\1>/g;
-                var spanMatch;
-                do {
-                    spanMatch = NOWIKI_RE.exec( sourceWikitext );
-                    if( spanMatch ) {
-                        nowikiSpanStarts.push( spanMatch.index );
-                        nowikiSpanLengths.push( spanMatch[0].length );
-                    }
-                } while( spanMatch );
+        var headerMatches = [];
+        var headerMatch;
 
-                // So that we don't check every ignore span every time
-                var nowikiSpanStartIdx = 0;
+        matchLoop:
+        do {
+            headerMatch = HEADER_REGEX.exec( pageWikitext );
+            if( headerMatch ) {
 
-                var headerMatches = [];
-                var headerMatch;
+                // Check that we're not inside a ignored span
+                for( var ignoredIdx = ignoredSpanStartIdx; ignoredIdx <
+                    ignoredSpanStarts.length; ignoredIdx++ ) {
+                    if( headerMatch.index > ignoredSpanStarts[ignoredIdx] ) {
+                        if ( headerMatch.index + headerMatch[0].length <=
+                            ignoredSpanStarts[ignoredIdx] + ignoredSpanLengths[ignoredIdx] ) {
 
-                matchLoop:
-                do {
-                    headerMatch = HEADER_REGEX.exec( sourceWikitext );
-                    if( headerMatch ) {
+                            // Not a header, since we're inside a ignored span
+                            continue matchLoop;
+                        } else {
 
-                        // Check that we're not inside a nowiki
-                        for( var nwIdx = nowikiSpanStartIdx; nwIdx <
-                            nowikiSpanStarts.length; nwIdx++ ) {
-                            if( headerMatch.index > nowikiSpanStarts[nwIdx] ) {
-                                if ( headerMatch.index + headerMatch[0].length <=
-                                    nowikiSpanStarts[nwIdx] + nowikiSpanLengths[nwIdx] ) {
-
-                                    // Not a header, since we're inside a nowiki!
-                                    continue matchLoop;
-                                } else {
-
-                                    // We'll never encounter this span again, since
-                                    // headers only get later and later in the wikitext
-                                    nowikiSpanStartIdx = nwIdx;
-                                }
-                            }
+                            // We'll never encounter this span again, since
+                            // headers only get later and later in the wikitext
+                            ignoredSpanStartIdx = ignoredIdx;
                         }
-                        headerMatches.push( headerMatch );
                     }
-                } while( headerMatch );
-
-                // We'll use this dictionary to calculate the duplicate index
-                var headersByText = {};
-                for( var i = 0; i < headerMatches.length; i++ ) {
-
-                    // Group 2 of HEADER_REGEX is the header text
-                    var text = headerMatches[i][2];
-                    headersByText[text] = ( headersByText[text] || [] ).concat( i );
                 }
+                headerMatches.push( headerMatch );
+            }
+        } while( headerMatch );
 
-                // allHeadersFromTarget should contain every header we found in the wikitext
-                // (and more, if sourcePageName was transcluded multiple times)
-                if( allHeadersFromTarget.length % headerMatches.length !== 0 ) {
-                    console.error(allHeadersFromTarget);
-                    console.error(headerMatches);
-                    throw new Error( "non-divisble header list lengths" );
-                }
+        // We'll use this dictionary to calculate the duplicate index
+        var headersByText = {};
+        for( var i = 0; i < headerMatches.length; i++ ) {
 
-                for( var headerIdx = 0; headerIdx < allHeadersFromTarget.length; headerIdx++ ) {
-                    var trueHeaderIdx = headerIdx % headerMatches.length;
-                    var headerText = headerMatches[trueHeaderIdx][2];
+            // Group 2 of HEADER_REGEX is the header text
+            var text = headerMatches[i][2];
+            headersByText[text] = ( headersByText[text] || [] ).concat( i );
+        }
 
-                    // NOTE! The duplicate index is calculated relative to the
-                    // *wikitext* header matches (because that's how the backend
-                    // does it)! That is, if we have a page that includes two
-                    // headers, both called "a", and we transclude that page
-                    // twice, the result will be four headers called "a". But we
-                    // want to assign those four headers, respectively, the
-                    // duplicate indices of 0, 1, 0, 1. That's why we use
-                    // trueHeaderIdx here, not headerIdx.
-                    var dupIdx = headersByText[headerText].indexOf( trueHeaderIdx );
+        // allHeadersFromTarget should contain every header we found in the wikitext
+        // (and more, if sourcePageName was transcluded multiple times)
+        if( allHeadersFromTarget.length % headerMatches.length !== 0 ) {
+            for( var i = 0; i < Math.max( allHeadersFromTarget.length, headerMatches.length ); i++ ) {
+                console.error( i, allHeadersFromTarget[i], allHeadersFromTarget[i] && allHeadersFromTarget[i].textContent, headerMatches[i] );
+            }
+            throw new Error( "non-divisble header list lengths" );
+        }
 
-                    var headerEl = allHeadersFromTarget[headerIdx];
-                    var headerId = headerEl[0].querySelector( "span.mw-headline" ).id;
+        var headerIdx = allHeadersFromTarget.indexOf( givenHeaderEl );
+        if( headerIdx < 0 ) {
+            console.error( 'givenHeaderEl', givenHeaderEl );
+            console.error( 'allHeadersFromTarget', allHeadersFromTarget );
+            throw new Error( "givenHeaderEl not in allHeadersFromTarget" );
+        }
+        var trueHeaderIdx = headerIdx % headerMatches.length;
+        var headerText = headerMatches[trueHeaderIdx][2];
 
-                    headers.push( {
-                        element: headerEl,
-                        pageId: sourcePageId,
-                        pageTitle: sourceTitle,
-                        text: headerText,
-                        dupIdx: dupIdx
-                    } );
-                } // for header in allHeadersFromTarget
-            } // for page in API results
+        // NOTE! The duplicate index is calculated relative to the
+        // *wikitext* header matches (because that's how the backend
+        // does it)! That is, if we have a page that includes two
+        // headers, both called "a", and we transclude that page
+        // twice, the result will be four headers called "a". But we
+        // want to assign those four headers, respectively, the
+        // duplicate indices of 0, 1, 0, 1. That's why we use
+        // trueHeaderIdx here, not headerIdx.
+        var dupIdx = headersByText[headerText].indexOf( trueHeaderIdx );
 
-            return headers;
-        }, function () {
-            console.error( arguments );
-        } );
+        var sectionStartIdx = headerMatches[trueHeaderIdx].index;
+        var sectionEndIdx = headerMatches[trueHeaderIdx + 1]
+                ? headerMatches[trueHeaderIdx + 1].index
+                : pageWikitext.length;
+
+        return {
+            title: headerText,
+            dupIdx: dupIdx,
+            startIdx: sectionStartIdx,
+            endIdx: sectionEndIdx,
+        };
     }
 
     /**
-     * Given `headersAndSourcePages` (the output of
-     * getHeadersAndSourcePages) and a DOM object in the current page
-     * corresponding to a link in a signature, locate the section
-     * containing that comment. That section may not be in the provided
-     * page! Returns an object with these properties:
-     *
-     *  - pageTitle: The full title of the page directly containing the
-     *    comment (in its wikitext, not through transclusion).
-     *  - sectionName: The anticipated wikitext section name. Should
-     *    appear inside the equal signs at the above index.
-     *  - sectionDupIdx: If there are multiple sections with the same
-     *    name, the 0-based index of the section with the comment among
-     *    those sections. Otherwise, 0.
-     *  - sectionLevel: The anticipated wikitext section level (e.g.
-     *    2 for an h2)
+     * Given a DOM object in the current page corresponding to a link in a
+     * signature, locate the section header (i.e. h1, h2, etc element) for the
+     * section containing that comment.
      */
-    function findSection( headersAndSourcePages, sigLinkElem ) {
-        console.log("findSection(",psdDomPageTitle,", ...)");
-
-        // Step 1: Travel from the signature link upwards to the nearest header
+    function findSectionHeaderElement( sigLinkElem ) {
+        var nearestHeader = null;
         var currElem = sigLinkElem;
 
-        var nearestHeader = null;
-
+        loop:
         while( ( currElem.id !== "mw-content-text" ) && ( currElem.tagName.toLowerCase() !== "body" ) ) {
             switch( currElem.tagName.toLowerCase() ) {
                 case "ul":
@@ -804,6 +743,7 @@ function loadReplyLink( $, mw ) {
                 case "li":
                 case "dd":
                 case "dl":
+                case "a":
                     // Headers aren't in these elements (and it would be a waste to check)
                     break;
                 case "h1":
@@ -814,22 +754,27 @@ function loadReplyLink( $, mw ) {
                 case "h6":
                     // Well, that was convenient
                     nearestHeader = currElem;
-                    break;
+                    break loop;
                 case "p":
                 case "span": // unlikely, but we'll check anyway
                 case "div":
+                case "table": // yeah, sometimes people put their whole talk page in a template
+                case "td":
                 default:
                     var tagName = currElem.tagName.toLowerCase();
-                    if( tagName !== "p" && tagName !== "span" && tagName !== "div" ) {
-                        console.warning( "unknown tag name ", tagName, " ", currElem );
+                    if( tagName !== "p" && tagName !== "span" && tagName !== "div" && tagName !== "table" && tagName !== "td" ) {
+                        console.warn( "unknown tag name ", tagName, " ", currElem );
                     }
                     var childHeaders = currElem.querySelector( HEADER_SELECTOR );
-                    if( childHeaders.length > 0 ) {
-                        nearestHeader = childHeaders[childHeaders.length - 1];
-                        break;
+                    if( childHeaders ) {
+                        childHeaders = iterableToList( childHeaders );
+                        if( childHeaders.length > 0 ) {
+                            nearestHeader = childHeaders[childHeaders.length - 1];
+                            break loop;
+                        }
                     }
                     break;
-            }
+            } // end switch ( currElem.tagName )
 
             if( currElem.previousElementSibling ) {
                 currElem = currElem.previousElementSibling;
@@ -839,146 +784,29 @@ function loadReplyLink( $, mw ) {
         } // end while
 
         if( nearestHeader === null ) {
-            console.error( "nearestHeader was null, sigLinkElem = ", sigLinkElem );
-            throw new Error( "nearestHeader was null" );
+            console.warn( "nearestHeader was null" );
         }
-
-        // Step 2: Find the corresponding header in the `headers` list
-        var headerObjs = headers.filter( function ( headerObj ) {
-            return headerObj.element === nearestHeader;
-        } );
-
-        var headerObj = null;
-        if( headerObjs.length > 1 ) {
-            console.error( "bad headerObjs: sigLinkElem = ", sigLinkElem, ", headerObjs = ", headerObjs );
-            throw new Error( "Huh? headerObjs had more than one element" );
-        } else if( headerObjs.length === 0 ) {
-            console.error( "empty headerObjs: sigLinkElem = ", sigLinkElem );
-            throw new Error( "empty headerObjs" );
-        } else {
-            headerObj = headerObjs[0];
-        }
-
-        // Step 3: package it up
-        var sectionLevel = nearestHeader.tagName.substring( 1 ); // that is, cut off the "h" at the beginning
-        var result = {
-            pageTitle: headerObj.pageTitle,
-            sectionName: headerObj.headerText,
-            sectionDupIdx: headerObj.dupIdx,
-            sectionLevel: sectionLevel
-        };
-        console.log("findSection return val: ",result);
-        return result;
+        return nearestHeader;
     }
 
     /**
-     * Given some wikitext that's split into sections, return the full
-     * wikitext (including header and newlines until the next header) of
-     * the section with the given name. To get the content before the
-     * first header, sectionName should be "".
-     *
-     * Performs a sanity check with the given section name.
+     * Given  a DOM object in the current page corresponding to a link in a
+     * signature, locate the section containing that comment. That section may
+     * not be in the current page!
      */
-    function getSectionWikitext( wikitext, sectionName, sectionDupeIdx ) {
-        console.log("In getSectionWikitext, sectionName = >" + sectionName + "< (wikitext.length = " + wikitext.length + ")");
-        //console.log("wikitext (first 1000 chars) is " + dirtyWikitext.substring(0, 1000));
-
-        // There are certain locations where a header may appear in the
-        // wikitext, but will not be present in the HTML; such as code
-        // blocks or comments. So we keep track of those ranges
-        // and ignore headings inside those.
-        var ignoreSpanStarts = []; // list of ignored span beginnings
-        var ignoreSpanLengths = []; // list of ignored span lengths
-        var IGNORE_RE = /(<pre>[\s\S]+?<\/pre>)|(<source.+?>[\s\S]+?<\/source>)|(<!--[\s\S]+?-->)/g;
-        var ignoreSpanMatch;
-        do {
-            ignoreSpanMatch = IGNORE_RE.exec( wikitext );
-            if( ignoreSpanMatch ) {
-                //console.log("ignoreSpan ",ignoreSpanStarts.length," = ",ignoreSpanMatch);
-                ignoreSpanStarts.push( ignoreSpanMatch.index );
-                ignoreSpanLengths.push( ignoreSpanMatch[0].length );
-            }
-        } while( ignoreSpanMatch );
-
-        var startIdx = -1; // wikitext index of section start
-        var endIdx = -1; // wikitext index of section end
-
-        var headerCounter = 0;
-        var headerMatch;
-
-        // So that we don't check every ignore span every time
-        var ignoreSpanStartIdx = 0;
-
-        var dupeCount = 0;
-        var lookingForEnd = false;
-
-        if( sectionName === "" ) {
-            // Getting first section
-            startIdx = 0;
-            lookingForEnd = true;
-        }
-
-        // Reset regex state, if for some reason we're not running this for the first time
-        HEADER_REGEX.lastIndex = 0;
-
-        headerMatchLoop:
-        do {
-            headerMatch = HEADER_REGEX.exec( wikitext );
-            if( headerMatch ) {
-
-                // Check that we're not inside one of the "ignore" spans
-                for( var igIdx = ignoreSpanStartIdx; igIdx <
-                    ignoreSpanStarts.length; igIdx++ ) {
-                    if( headerMatch.index > ignoreSpanStarts[igIdx] ) {
-                        if ( headerMatch.index + headerMatch[0].length <=
-                            ignoreSpanStarts[igIdx] + ignoreSpanLengths[igIdx] ) {
-
-                            console.log("(IGNORED, igIdx="+igIdx+") Header " + headerCounter + " (idx " + headerMatch.index + "): >" + headerMatch[0].trim() + "<");
-
-                            // Invalid header
-                            continue headerMatchLoop;
-                        } else {
-
-                            // We'll never encounter this span again, since
-                            // headers only get later and later in the wikitext
-                            ignoreSpanStartIdx = igIdx;
-                        }
-                    }
-                }
-
-                //console.log("Header " + headerCounter + " (idx " + headerMatch.index + "): >" + headerMatch[0].trim() + "<");
-                // Note that if the lookingForEnd block were second,
-                // then two consecutive matching section headers might
-                // result in the wrong section being matched!
-                if( lookingForEnd ) {
-                    endIdx = headerMatch.index;
-                    break;
-                } else if( wikitextHeaderEqualsDomHeader( /* wikitext */ headerMatch[2], /* dom */ sectionName ) ) {
-                    if( dupeCount === sectionDupeIdx ) {
-                        startIdx = headerMatch.index;
-                        lookingForEnd = true;
-                    } else {
-                        dupeCount++;
-                    }
-                }
-            }
-            headerCounter++;
-        } while( headerMatch );
-
-        if( startIdx < 0 ) {
-            throw( "Could not find section named \"" + sectionName + "\" (dupe idx " + sectionDupeIdx + ")" );
-        }
-
-        // If we encountered no section after the target section,
-        // then the target was the last one and the slice will go
-        // until the end of wikitext
-        if( endIdx < 0 ) {
-            //console.log("[getSectionWikitext] endIdx negative, setting to " + wikitext.length);
-            endIdx = wikitext.length;
-        }
-
-        //console.log("[getSectionWikitext] Slicing from " + startIdx + " to " + endIdx);
-        return wikitext.slice( startIdx, endIdx );
+    function findSectionMain( sigLinkElem ) {
+        // TODO what if there are no headers
+        var nearestHeader = findSectionHeaderElement( sigLinkElem );
+        var pageTitle = ( nearestHeader ? pageNameOfHeader( nearestHeader ) : currentPageName ).replace( /_/g, " " );
+        return getWikitext( pageTitle, /* useCaching */ true ).then( function ( revObj ) {
+            var pageText = revObj.content;
+            var sectionObj = findSectionInPageWikitext( nearestHeader, pageTitle, pageText );
+            sectionObj.pageTitle = pageTitle;
+            sectionObj.revObj = revObj;
+            sectionObj.headerEl = nearestHeader;
+            sectionObj.level = parseInt( nearestHeader.tagName.substring( 1 ) ); // that is, cut off the "h" at the beginning
+            return sectionObj;
+        }, function ( err ) { throw new Error( err ); } );
     }
 
     /**
@@ -990,7 +818,7 @@ function loadReplyLink( $, mw ) {
      * Returns -1 if we couldn't find anything.
      */
     function sigIdxToStrIdx( sectionWikitext, sigIdx ) {
-        console.log( "In sigIdxToStrIdx, sigIdx = " + sigIdx );
+        //console.log( "In sigIdxToStrIdx, sigIdx = " + sigIdx );
 
         // There are certain regions that we skip while attaching links:
         //
@@ -1054,7 +882,7 @@ function loadReplyLink( $, mw ) {
         for( ; true ; matchIdx++ ) {
             match = sigRgx.exec( sectionWikitext );
             if( !match ) {
-                console.error("[sigIdxToStrIdx] out of matches");
+                console.error("[sigIdxToStrIdx] out of matches, matchIdx was",matchIdx,"sigIdx was",sigIdx);
                 return -1;
             }
             //console.log( "sig match (matchIdx = " + matchIdx + ") is >" + match[0] + "< (index = " + match.index + ")" );
@@ -1195,21 +1023,18 @@ function loadReplyLink( $, mw ) {
     }
 
     /**
-     * Using the text in #reply-dialog-field, add a reply to the
-     * current page. rplyToXfdNom is true if we're replying to an XfD nom,
-     * in which case we should use an asterisk instead of a colon.
-     * cmtAuthorDom is the username of the person who wrote the comment
-     * we're replying to, parsed from the DOM. revObj is the object returned
-     * by getWikitext for the page with the comment; findSectionResult is the
-     * object returned by findSection for the comment.
+     * Using the text in #reply-dialog-field, add a reply to the current page.
+     * rplyToXfdNom is true if we're replying to an XfD nom, in which case we
+     * should use an asterisk instead of a colon.  revObj is the object returned
+     * by getWikitext for the page with the comment; sectionObj is the object
+     * returned by findSectionMain for the comment.
      *
      * Returns a Deferred that resolves/rejects when the reply succeeds/fails.
      */
-    function doReply( indentation, header, sigIdx, cmtAuthorDom, rplyToXfdNom, revObj, findSectionResult ) {
-        console.log("TOP OF doReply",header,findSectionResult);
-        header = [ "" + findSectionResult.sectionLevel, findSectionResult.sectionName, findSectionResult.sectionDupeIdx ];
+    function doReply( indentation, sigIdx, cmtAuthorAndLink, rplyToXfdNom, sectionObj ) {
         var deferred = $.Deferred();
 
+        var revObj = sectionObj.revObj;
         var wikitext = revObj.content;
 
         try {
@@ -1265,29 +1090,22 @@ function loadReplyLink( $, mw ) {
                 fullReply = reply;
             }
 
-            // Prepare section metadata for getSectionWikitext call
-            console.log( "in doReply, header =", header );
-            var sectionHeader, sectionIdx;
-            if( header === null ) {
-                sectionHeader = null, sectionIdx = -1;
-            } else {
-                sectionHeader = header[1], sectionDupeIdx = header[2];
-            }
-
             // Compatibility with User:Bility/copySectionLink
-            if( document.querySelector( "span.mw-headline a#sectiontitlecopy0" ) ) {
+            // TODO re-evaluate
+            //if( document.querySelector( "span.mw-headline a#sectiontitlecopy0" ) ) {
 
-                // If copySectionLink is active, the paragraph symbol at
-                // the end is a fake
-                sectionHeader = sectionHeader.replace( /\s*¶$/, "" );
-            }
+            //    // If copySectionLink is active, the paragraph symbol at
+            //    // the end is a fake
+            //    sectionHeader = sectionHeader.replace( /\s*¶$/, "" );
+            //}
 
             // Compatibility with the "auto-number headings" preference
-            if( document.querySelector( "span.mw-headline-number" ) ) {
-                sectionHeader = sectionHeader.replace( /^\d+ /, "" );
-            }
+            // TODO re-evaluate
+            //if( document.querySelector( "span.mw-headline-number" ) ) {
+            //    sectionHeader = sectionHeader.replace( /^\d+ /, "" );
+            //}
 
-            var sectionWikitext = getSectionWikitext( wikitext, sectionHeader, sectionDupeIdx );
+            var sectionWikitext = wikitext.slice( sectionObj.startIdx, sectionObj.endIdx );
             var oldSectionWikitext = sectionWikitext; // We'll String.replace old w/ new
 
             // Now, obtain the index of the end of the comment
@@ -1302,8 +1120,7 @@ function loadReplyLink( $, mw ) {
             // edit-summary and sanity-check purposes
             var userRgx = new RegExp( /\[\[\s*(?:m:)?:?\s*/.source + userspcLinkRgx.both + /\s*(.+?)(?:\/.+?)?(?:#.+?)?\s*(?:\|.+?)?\]\]/.source, "ig" );
             var userMatches = processCharEntitiesWikitext( sectionWikitext.slice( 0, strIdx ) ).match( userRgx );
-            var cmtAuthorWktxt = userRgx.exec(
-                    userMatches[userMatches.length - 1] )[1];
+            var cmtAuthorWktxt = userRgx.exec( userMatches[userMatches.length - 1] )[1];
 
             if( cmtAuthorWktxt === "DoNotArchiveUntil" ) {
                 userRgx.lastIndex = 0;
@@ -1317,7 +1134,7 @@ function loadReplyLink( $, mw ) {
                 return u.replace( /_/g, " " );
             }
             cmtAuthorWktxt = sanitizeUsername( cmtAuthorWktxt );
-            cmtAuthorDom = sanitizeUsername( cmtAuthorDom );
+            var cmtAuthorDom = sanitizeUsername( cmtAuthorAndLink.username );
 
             // Do a sanity check: is the sig username the same as the
             // DOM one?  We attempt to check sigRedirectMapping in case
@@ -1334,9 +1151,8 @@ function loadReplyLink( $, mw ) {
             sectionWikitext = insertTextAfterIdx( sectionWikitext, strIdx,
                     indentation.length, fullReply );
 
-            // Also, if the user wanted the edit request to be answered,
-            // do that
-            var editReqCheckbox = document.getElementById(  "reply-link-option-edit-req" );
+            // Also, if the user wanted the edit request to be answered, do that
+            var editReqCheckbox = document.getElementById( "reply-link-option-edit-req" );
             var markedEditReq = false;
             if( editReqCheckbox && editReqCheckbox.checked ) {
                 sectionWikitext = markEditReqAnswered( sectionWikitext );
@@ -1355,8 +1171,7 @@ function loadReplyLink( $, mw ) {
                 return deferred;
             }
 
-            var newWikitext = wikitext.replace( oldSectionWikitext,
-                    sectionWikitext );
+            var newWikitext = wikitext.replace( oldSectionWikitext, sectionWikitext );
 
             // Build summary
             var defaultSummmary = mw.msg( "rl-replying-to" ) +
@@ -1368,13 +1183,13 @@ function loadReplyLink( $, mw ) {
             if( window.replyLinkCustomSummary && customSummaryField.value ) {
                 summaryCore = customSummaryField.value.trim();
             }
-            var summary = "/* " + sectionHeader + " */ " + summaryCore + mw.msg( "rl-advert" );
+            var sectionId = sectionObj.headerEl.querySelector( "span.mw-headline" ).id;
+            var summary = "/* " + sectionId.replace( /_/g, " " ) + " */ " + summaryCore + mw.msg( "rl-advert" );
 
-            // Send another request, this time to actually edit the
-            // page
-            api.postWithToken( "csrf", {
+            // Send another request, this time to actually edit the page
+            api.postWithEditToken( {
                 action: "edit",
-                title: findSectionResult.page,
+                title: sectionObj.pageTitle,
                 summary: summary,
                 text: newWikitext,
                 basetimestamp: revObj.timestamp
@@ -1383,14 +1198,13 @@ function loadReplyLink( $, mw ) {
                 // We put this function on the window object because we
                 // give the user a "reload" link, and it'll trigger the function
                 window.replyLinkReload = function () {
-                    window.location.hash = sectionHeader.replace( / /g, "_" );
-                    if( findSectionResult.nearbyMwId ) {
-                        document.cookie = "parsoid_jump=" + findSectionResult.nearbyMwId;
-                    }
+                    window.location.hash = sectionId;
+                    var path = getPathToElement( cmtAuthorAndLink.link ).join( "|" );
+                    document.cookie = JUMP_COOKIE_KEY + "=" + path;
                     window.location.reload( true );
                 };
                 if ( data && data.edit && data.edit.result && data.edit.result == "Success" ) {
-                    var needPurge = findSectionResult.page !== currentPageName;
+                    var needPurge = sectionObj.pageTitle !== currentPageName;
 
                     function finishReply( _ ) {
                         var reloadHtml = window.replyLinkAutoReload ? mw.msg( "rl-reloading" )
@@ -1546,13 +1360,13 @@ function loadReplyLink( $, mw ) {
 
                 // If the current section header text indicates an edit request,
                 // offer to mark it as answered
-                if( ourMetadata[1] && EDIT_REQ_REGEX.test( ourMetadata[1][1] ) ) {
-                    newOption( "reply-link-option-edit-req", "Mark edit request as answered?", false );
-                }
+                //if( ourMetadata[1] && EDIT_REQ_REGEX.test( ourMetadata[1][1] ) ) {
+                //    newOption( "reply-link-option-edit-req", "Mark edit request as answered?", false );
+                //}
 
                 // If the previous comment was indented by OUTDENT_THRESH,
                 // offer to outdent
-                if( ourMetadata[0].length >= OUTDENT_THRESH ) {
+                if( ourMetadata.indentation.length >= OUTDENT_THRESH ) {
                     newOption( "reply-link-option-outdent", "Outdent?", false );
                 }
 
@@ -1586,6 +1400,15 @@ function loadReplyLink( $, mw ) {
                     }
                 };
 
+                // Start loading in the section object, so we don't have to do it in startReply
+                try {
+                    var sectionObjPromise = findSectionMain( cmtLink );
+                } catch ( e ) {
+                    console.error( e );
+                    setStatus( "Error locating the section: " + e );
+                    document.querySelector( "#reply-link-buttons button" ).disabled = true;
+                }
+
                 // Called by the "Reply" button, Ctrl-Enter in the text area, and
                 // Enter/Ctrl-Enter in the summary field
                 function startReply() {
@@ -1596,26 +1419,25 @@ function loadReplyLink( $, mw ) {
                     document.querySelector( "#reply-link-buttons button" ).disabled = true;
                     setStatus( mw.msg( "rl-loading" ) );
 
-                    // TODO no more Parsoid!
-
-                    var parsoidUrl = PARSOID_ENDPOINT + encodeURIComponent( currentPageName ) +
-                            "/" + mw.config.get( "wgCurRevisionId" ),
-                        findSectionResultPromise = $.get( parsoidUrl )
-                            .then( function ( parsoidDomString ) {
-                                return findSection( currentPageName, parsoidDomString, cmtLink );
-                        },console.error );
-
-                    var revObjPromise = findSectionResultPromise.then( function ( findSectionResult ) {
-                        console.log( "findSectionResult ", findSectionResult );
-                        return getWikitext( findSectionResult.page );
-                    },console.error );
-
-                    $.when( findSectionResultPromise, revObjPromise ).then( function ( findSectionResult, revObj ) {
-                        // ourMetadata contains data in the format:
-                        // [indentation, header, sigIdx]
-                        doReply( ourMetadata[0], ourMetadata[1], ourMetadata[2],
-                            cmtAuthor, rplyToXfdNom, revObj, findSectionResult );
-                    }, function (e) { setStatusError(new Error(e))} );
+                    sectionObjPromise.then( function ( sectionObj ) {
+                        getLastRevId( sectionObj.pageTitle ).then( function ( currRevId ) {
+                            if( currRevId > sectionObj.pageRevId ) {
+                                // Someone's edited this page since we parsed it
+                                setStatus( mw.msg( "rl-out-of-date" ) );
+                            } else {
+                                doReply(
+                                    ourMetadata.indentation,
+                                    ourMetadata.sigIdx,
+                                    cmtAuthorAndLink,
+                                    rplyToXfdNom,
+                                    sectionObj
+                                );
+                            }
+                        } );
+                    }, function ( err ) {
+                        console.error( err );
+                        setStatus( "Error (async) locating the section: " + err );
+                    } );
                 }
 
                 // Event listener for the "Reply" button
@@ -1840,7 +1662,8 @@ function loadReplyLink( $, mw ) {
                     idNum++;
 
                     // Update global metadata dictionary
-                    metadata[linkId] = currIndentation;
+                    metadata[linkId] = {};
+                    metadata[linkId].indentation = currIndentation;
                 }
             } else if( node.nodeType === 1 &&
                     /^(div|p|dl|dd|ul|li|span|ol|table|tbody|tr|td)$/.test( node.tagName.toLowerCase() ) ) {
@@ -1864,8 +1687,7 @@ function loadReplyLink( $, mw ) {
             }
         }
 
-        // This loop adds two entries in the metadata dictionary:
-        // the header data, and the sigIdx values
+        // This loop adds sigIdx entries in the metadata dictionary
         var sigIdxEls = iterableToList( mainContent.querySelectorAll(
                 HEADER_SELECTOR + ",span.reply-link-wrapper a" ) );
         var currSigIdx = 0, j, numSigIdxEls, currHeaderEl, currHeaderData;
@@ -1884,47 +1706,11 @@ function loadReplyLink( $, mw ) {
 
                 // Reset signature counter
                 currSigIdx = 0;
-
-                // Dig down one level for the header text because
-                // MW buries the text in a span inside the header
-                var headlineEl = null;
-                if( currHeaderEl.childNodes[0].className &&
-                    currHeaderEl.childNodes[0].className.includes( "mw-headline" ) ) {
-                    headlineEl = currHeaderEl.childNodes[0];
-                } else {
-                    for( var i = 0; i < currHeaderEl.childNodes.length; i++ ) {
-                        if( currHeaderEl.childNodes[i].className &&
-                                currHeaderEl.childNodes[i].className.includes( "mw-headline" ) ) {
-                            headlineEl = currHeaderEl.childNodes[i];
-                            break;
-                        }
-                    }
-                }
-
-                var headerName = null;
-                if( headlineEl ) {
-                    headerName = headlineEl.textContent;
-                }
-
-                if( headerName === null ) {
-                    console.error( currHeaderEl );
-                    throw "Couldn't parse a header element!";
-                }
-
-                headerLvl = headerTagNameMatch[1];
-                currHeaderData = [ headerLvl, headerName, headerIdx ];
-                headerIdx++;
             } else {
-
-                // Save all the metadata for this link
-                currIndentation = metadata[ sigIdxEls[j].id ];
-                metadata[ sigIdxEls[j].id ] = [ currIndentation,
-                    currHeaderData ? currHeaderData.slice(0) : null,
-                    currSigIdx ];
+                metadata[ sigIdxEls[j].id ].sigIdx = currSigIdx;
                 currSigIdx++;
             }
         }
-        //console.log(metadata);
 
         // Disable links inside hatnotes, archived discussions
         var badRegionsSelector = "div.archived,div.resolved,table";
@@ -1952,12 +1738,7 @@ function loadReplyLink( $, mw ) {
 
         mw.util.addCSS( ".reply-link-wrapper { background-color: orange; }" );
 
-        // Fetch content, Parsoid DOM, etc
-        var parsoidUrl = PARSOID_ENDPOINT + encodeURIComponent( currentPageName );
-        $.when(
-            $.get( parsoidUrl ),
-            api.loadMessages( INT_MSG_KEYS )
-        ).then( function ( parsoidDomString, _ ) {
+        api.loadMessages( INT_MSG_KEYS ).then( function () {
             buildUserspcLinkRgx();
 
             // Statistics variables
@@ -1966,22 +1747,19 @@ function loadReplyLink( $, mw ) {
             // Run one test on a wrapper link
             function runOneTestOn( wrapper ) {
                 try {
-                    var cmtAuthorAndLink = getCommentAuthor( wrapper ),
-                        cmtAuthor = cmtAuthorAndLink.username,
-                        cmtLink = cmtAuthorAndLink.link;
+                    var cmtAuthorAndLink = getCommentAuthor( wrapper );
                     var ourMetadata = metadata[ wrapper.children[0].id ];
-                    findSection( currentPageName, parsoidDomString, cmtLink ).then( function ( findSectionResult ) {
-                        var revObjPromise = getWikitext( findSectionResult.page, /* useCaching */ true );
-                        $.when( findSectionResult, revObjPromise ).then( function ( findSectionResult, revObj ) {
-                                doReply( ourMetadata[0], ourMetadata[1], ourMetadata[2],
-                                        cmtAuthor, false, revObj, findSectionResult ).done( function () {
-                                            wrapper.style.background = "green";
-                                            successes++;
-                                        } ).fail( function () {
-                                            wrapper.style.background = "red";
-                                            failures++;
-                                        } );
-                        }, function ( e ) {
+                    findSectionMain( cmtAuthorAndLink.link ).then( function ( sectionObj ) {
+                        doReply(
+                            ourMetadata.indentation,
+                            ourMetadata.sigIdx,
+                            cmtAuthorAndLink,
+                            /* rplyToXfdNom */ false,
+                            sectionObj
+                        ).done( function () {
+                            wrapper.style.background = "green";
+                            successes++;
+                        } ).fail( function () {
                             wrapper.style.background = "red";
                             failures++;
                         } );
@@ -1998,7 +1776,7 @@ function loadReplyLink( $, mw ) {
                 var wrapper = wrappers.shift();
                 if( wrapper ) {
                     runOneTestOn( wrapper );
-                    setTimeout( runOneTest, 750 );
+                    setTimeout( runOneTest, 250 );
                 } else {
                     var results = successes + " successes, " + failures + " failures";
                     $( "#mw-content-text" ).prepend( results ).append( results );
@@ -2089,14 +1867,51 @@ function loadReplyLink( $, mw ) {
                 el.querySelector( "a" ).click();
             }
         }
-    }
+
+        // Timeout to give other scripts time to load
+        setTimeout( function () {
+
+            // If there's an element to jump to, jump to it
+            var jumpCookieIdx = document.cookie.indexOf( JUMP_COOKIE_KEY );
+            if( jumpCookieIdx >= 0 ) {
+                try {
+                    var path = new RegExp( JUMP_COOKIE_KEY + "=([^;]+)" ).exec( document.cookie )[1].split( "|" );
+                    var el = document.getElementById( "mw-content-text" );
+                    for( var i = path.length - 1; i >= 0; i-- ) {
+                        el = el.children[parseInt(path[i])];
+                    }
+                    el.scrollIntoView();
+
+                    // And then try to find the "container" element, and highlight that
+                    outer:
+                    while( true ) {
+                        switch( el.tagName.toLowerCase() ) {
+                            case "ul":
+                            case "ol":
+                            case "li":
+                            case "dd":
+                            case "dl":
+                            case "p":
+                            case "span":
+                            case "div":
+                            case "table":
+                            case "td":
+                                break outer;
+                        }
+                        el = el.parentNode;
+                    }
+                    el.className += "reply-link-jump-highlight";
+                    mw.loader.addStyleTag( "@keyframes reply-link-jump-highlight-keyframes { from { background-color: #ffb; } to { background-color: transparent; } } .reply-link-jump-highlight { animation: reply-link-jump-highlight-keyframes  2s; }" );
+                } catch( e ) { console.error(e); }
+                document.cookie = JUMP_COOKIE_KEY + "=; expires=Thu, 01 Jan 1970 00:00:01 GMT";
+            }
+        }, 500 );
+    } // end function onReady
 
     mw.loader.load( "mediawiki.ui.input", "text/css" );
     mw.loader.using( [ "mediawiki.util", "mediawiki.api" ] ).then( function () {
         mw.hook( "wikipage.content" ).add( onReady );
     } );
-
-    $.getScript('https://en.wikipedia.org/w/index.php?title=User:Enterprisey/parsoid-jump.js&action=raw&ctype=text%2Fjavascript');
 
     // Return functions for testing
     return {
