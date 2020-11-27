@@ -618,6 +618,9 @@ function loadReplyLink( $, mw ) {
 
     /**
      * Finds a section in the given page's wikitext.
+     *
+     * If givenHeaderEl is null, that means it's the "zeroth" section, i.e.
+     * the section that ends at the first page header.
      */
 	function findSectionInPageWikitext( givenHeaderEl, pageTitle, pageWikitext ) {
         var allHeaders = document.querySelector( "#mw-content-text" )
@@ -694,6 +697,16 @@ function loadReplyLink( $, mw ) {
             throw new Error( "non-divisble header list lengths" );
         }
 
+        if( givenHeaderEl === null ) {
+            var sectionEndIdx = headerMatches[0] ? headerMatches[0].index : pageWikitext.length;
+            return {
+                title: "",
+                dupIdx: 0,
+                startIdx: 0,
+                endIdx: sectionEndIdx,
+            };
+        }
+
         var headerIdx = allHeadersFromTarget.indexOf( givenHeaderEl );
         if( headerIdx < 0 ) {
             console.error( 'givenHeaderEl', givenHeaderEl );
@@ -734,9 +747,11 @@ function loadReplyLink( $, mw ) {
     function findSectionHeaderElement( sigLinkElem ) {
         var nearestHeader = null;
         var currElem = sigLinkElem;
+        var sigLinkTopPos = sigLinkElem.getBoundingClientRect().top;
 
         loop:
         while( ( currElem.id !== "mw-content-text" ) && ( currElem.tagName.toLowerCase() !== "body" ) ) {
+            var familiarTagName = false;
             switch( currElem.tagName.toLowerCase() ) {
                 case "ul":
                 case "ol":
@@ -752,7 +767,7 @@ function loadReplyLink( $, mw ) {
                 case "h4":
                 case "h5":
                 case "h6":
-                    // Well, that was convenient
+                    // Well, that was convenient (found a header)
                     nearestHeader = currElem;
                     break loop;
                 case "p":
@@ -760,14 +775,23 @@ function loadReplyLink( $, mw ) {
                 case "div":
                 case "table": // yeah, sometimes people put their whole talk page in a template
                 case "td":
+                case "sub":
+                case "sup":
+                case "b":
+                    familiarTagName = true;
                 default:
                     var tagName = currElem.tagName.toLowerCase();
-                    if( tagName !== "p" && tagName !== "span" && tagName !== "div" && tagName !== "table" && tagName !== "td" ) {
+                    if( !familiarTagName ) {
+                        // just in case there's a tag not listed here that needs special handling
                         console.warn( "unknown tag name ", tagName, " ", currElem );
                     }
-                    var childHeaders = currElem.querySelector( HEADER_SELECTOR );
+                    var childHeaders = currElem.querySelectorAll( HEADER_SELECTOR );
                     if( childHeaders ) {
-                        childHeaders = iterableToList( childHeaders );
+                        childHeaders = iterableToList( childHeaders )
+                            .filter( function ( header ) {
+                                // We don't want to pick up headers below the comment
+                                return header.getBoundingClientRect().top < sigLinkTopPos;
+                            } );
                         if( childHeaders.length > 0 ) {
                             nearestHeader = childHeaders[childHeaders.length - 1];
                             break loop;
@@ -795,7 +819,6 @@ function loadReplyLink( $, mw ) {
      * not be in the current page!
      */
     function findSectionMain( sigLinkElem ) {
-        // TODO what if there are no headers
         var nearestHeader = findSectionHeaderElement( sigLinkElem );
         var pageTitle = ( nearestHeader ? pageNameOfHeader( nearestHeader ) : currentPageName ).replace( /_/g, " " );
         return getWikitext( pageTitle, /* useCaching */ true ).then( function ( revObj ) {
@@ -804,7 +827,7 @@ function loadReplyLink( $, mw ) {
             sectionObj.pageTitle = pageTitle;
             sectionObj.revObj = revObj;
             sectionObj.headerEl = nearestHeader;
-            sectionObj.level = parseInt( nearestHeader.tagName.substring( 1 ) ); // that is, cut off the "h" at the beginning
+            //sectionObj.level = parseInt( nearestHeader.tagName.substring( 1 ) ); // that is, cut off the "h" at the beginning
             return sectionObj;
         }, function ( err ) { throw new Error( err ); } );
     }
@@ -1089,21 +1112,6 @@ function loadReplyLink( $, mw ) {
             } else {
                 fullReply = reply;
             }
-
-            // Compatibility with User:Bility/copySectionLink
-            // TODO re-evaluate
-            //if( document.querySelector( "span.mw-headline a#sectiontitlecopy0" ) ) {
-
-            //    // If copySectionLink is active, the paragraph symbol at
-            //    // the end is a fake
-            //    sectionHeader = sectionHeader.replace( /\s*¶$/, "" );
-            //}
-
-            // Compatibility with the "auto-number headings" preference
-            // TODO re-evaluate
-            //if( document.querySelector( "span.mw-headline-number" ) ) {
-            //    sectionHeader = sectionHeader.replace( /^\d+ /, "" );
-            //}
 
             var sectionWikitext = wikitext.slice( sectionObj.startIdx, sectionObj.endIdx );
             var oldSectionWikitext = sectionWikitext; // We'll String.replace old w/ new
@@ -1468,7 +1476,7 @@ function loadReplyLink( $, mw ) {
                             "/w/api.php?action=parse&format=json&title=" + currentPageName + "&text=" + sanitizedCode
                                 + "&pst=1",
                             function ( res ) {
-                                if ( !res || !res.parse || !res.parse.text ) return console.log( "Preview failed" );
+                                if ( !res || !res.parse || !res.parse.text ) return console.error( "Preview failed" );
                                 document.getElementById( "reply-link-preview" ).innerHTML = res.parse.text['*'];
                                 // Add target="_blank" to links to make them open in a new tab by default
                                 var links = document.querySelectorAll( "#reply-link-preview a" );
