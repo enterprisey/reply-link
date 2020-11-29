@@ -1680,7 +1680,7 @@ function loadReplyLink( $, mw ) {
                     case "ul": newIndentSymbol = "*"; break;
                     case "ol": newIndentSymbol = "#"; break;
                     case "div":
-                        if( node.className.includes( "xfd_relist" ) ) {
+                        if( node.className.includes( "xfd_relist" ) || node.className.includes( "thumbcaption" ) ) {
                             continue;
                         }
                         break;
@@ -1838,14 +1838,15 @@ function loadReplyLink( $, mw ) {
         }
 
         // Default values for some preferences
-        if( window.replyLinkAutoReload === undefined ) window.replyLinkAutoReload = true;
-        if( window.replyLinkDryRun === undefined ) window.replyLinkDryRun = "never";
-        if( window.replyLinkPreloadPing === undefined ) window.replyLinkPreloadPing = "always";
-        if( window.replyLinkPreloadPingTpl === undefined ) window.replyLinkPreloadPingTpl = "{{u|##}}, ";
-        if( window.replyLinkCustomSummary === undefined ) window.replyLinkCustomSummary = false;
-        if( window.replyLinkTestMode === undefined ) window.replyLinkTestMode = false;
-        if( window.replyLinkTestInstantReply === undefined) window.replyLinkTestInstantReply = false;
-        if( window.replyLinkAutoIndentation === undefined ) window.replyLinkAutoIndentation = "checkbox";
+        function defaultValue( prefName, defaultValue ) { if( window[prefName] === undefined ) window[prefName] = defaultValue; }
+        defaultValue( "replyLinkAutoReload",       true );
+        defaultValue( "replyLinkDryRun",           "never" );
+        defaultValue( "replyLinkPreloadPing",      "always" );
+        defaultValue( "replyLinkPreloadPingTpl",   "{{u|##}}, " );
+        defaultValue( "replyLinkCustomSummary",    false );
+        defaultValue( "replyLinkTestMode",         false );
+        defaultValue( "replyLinkTestInstantReply", false );
+        defaultValue( "replyLinkAutoIndentation",  "checkbox" );
 
         // Insert "reply" links into DOM
         attachLinks();
@@ -1854,6 +1855,19 @@ function loadReplyLink( $, mw ) {
         if( window.replyLinkTestMode ) {
             mw.util.addPortletLink( "p-cactions", "#", "reply-link test mode", "pt-reply-link-test" )
                 .addEventListener( "click", runTestMode );
+
+            // Also add "sig check" links to each section header
+            $( "#mw-content-text" ).find( "h1,h2,h3,h4,h5,h6" ).each( function ( idx, header ) {
+                $( header ).find( ".mw-editsection *" ).last().before(
+                    "<span style='color: #54595d'> | </span>",
+                    $( "<span>" ).append(
+                        $( "<a>" )
+                            .attr( "href", "#" )
+                            .text( "sig check" )
+                            .click( function () {
+                                // TODO finish this part
+                             } ) ) );
+            } );
         }
 
         // This large string creats the "pending" texture
