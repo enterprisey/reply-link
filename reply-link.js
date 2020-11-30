@@ -120,7 +120,7 @@ function loadReplyLink( $, mw ) {
     /**
      * The current page name, including namespace, because we may be reading it
      * a lot (especially in findUsernameInElem if we're on someone's user
-     * talk page)
+     * talk page). Has underscores instead of spaces!
      */
     var currentPageName;
 
@@ -1226,7 +1226,7 @@ function loadReplyLink( $, mw ) {
                 };
 
                 if ( data && data.edit && data.edit.result && data.edit.result == "Success" ) {
-                    var needPurge = sectionObj.pageTitle !== currentPageName;
+                    var needPurge = sectionObj.pageTitle !== currentPageName.replace( /_/g, " " );
 
                     function finishReply( _ ) {
                         var reloadHtml = window.replyLinkAutoReload ? mw.msg( "rl-reloading" )
