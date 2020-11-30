@@ -26,6 +26,7 @@ function loadReplyLink( $, mw ) {
             "rl-to-label": " to ",
             "rl-auto-indent": "Automatically indent?",
             "rl-out-of-date": "Someone has edited this page since you started replying!",
+            "rl-edit-fail": "While replying, the edit failed."
         },
         "pt": {
             "rl-advert": "(usando [[w:en:User:Enterprisey/reply-link|reply-link]])",
@@ -1200,7 +1201,7 @@ function loadReplyLink( $, mw ) {
             if( canMakeSectionEdit ) {
                 editParams.section = sectionObj.idxInDomHeaders + 1;
                 if( sectionWikitext.startsWith( oldSectionWikitext ) ) {
-                    editParams.appendText = "\n" + sectionWikitext.substring( oldSectionWikitext.length ).trim();
+                    editParams.appendtext = "\n" + sectionWikitext.substring( oldSectionWikitext.length ).trim();
                 } else {
                     editParams.text = sectionWikitext;
                 }
@@ -1208,6 +1209,8 @@ function loadReplyLink( $, mw ) {
                 var newWikitext = wikitext.replace( oldSectionWikitext, sectionWikitext );
                 editParams.text = newWikitext;
             }
+            console.log(editParams);
+            //throw new Error(1);
 
             // Send another request, this time to actually edit the page
             api.postWithEditToken( editParams ).done ( function ( data ) {
@@ -1263,7 +1266,7 @@ function loadReplyLink( $, mw ) {
                 //console.log(data);
                 document.getElementById( "reply-dialog-field" ).style["background-image"] = "";
             } ).fail ( function( code, result ) {
-                setStatus( "While replying, the edit failed." );
+                setStatus( mw.msg( "rl-edit-fail" ) );
                 console.log(code);
                 console.log(result);
                 deferred.reject();
