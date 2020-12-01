@@ -1317,7 +1317,7 @@ function loadReplyLink( $, mw ) {
                     var needPurge = sectionObj.pageTitle !== currentPageName.replace( /_/g, " " );
 
                     function finishReply( _ ) {
-                        if( canMakeSectionEdit && window.replyLinkLoadNewInPlace ) {
+                        if( canMakeSectionEdit && window.replyLinkAutoReload && window.replyLinkLoadNewInPlace ) {
                             performInPlaceReload( cmtAuthorAndLink.link, sectionObj );
                         } else {
                             var reloadHtml = window.replyLinkAutoReload ? mw.msg( "rl-reloading" )
