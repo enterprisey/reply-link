@@ -143,7 +143,7 @@ function loadReplyLink( $, mw ) {
     var replyWasSaved = false;
 
     /**
-     * Cache for getWikitext. Only useful in test mode.
+     * Cache for getWikitext.
      */
     var getWikitextCache = {};
 
@@ -321,8 +321,10 @@ function loadReplyLink( $, mw ) {
         // parent will be the h2; and the parent of the h2 is the
         // content container that we want
         var candidates = document.querySelectorAll( targetHeader + " > span.mw-headline" );
-        if( !candidates.length ) return document.getElementById( "mw-content-text" );
-        var candidate = candidates[candidates.length-1].parentElement.parentElement;
+        if( !candidates.length ) {
+            return document.getElementById( "mw-content-text" );
+        }
+        var candidate = candidates[ candidates.length - 1 ].parentElement.parentElement;
 
         // Compatibility with User:Kephir/gadgets/unclutter.js
         if( candidate.className.includes( "kephir-unclutter-discussion-wrapper" ) ) {
@@ -333,10 +335,10 @@ function loadReplyLink( $, mw ) {
         // That script puts each section in its own div, so we need to
         // go out another level if it's running
         if( candidate.className === "hover-edit-section" ) {
-            return candidate.parentElement;
-        } else {
-            return candidate;
+            candidate = candidate.parentElement;
         }
+
+        return candidate;
     }
 
     /**
@@ -399,7 +401,38 @@ function loadReplyLink( $, mw ) {
             path.push( iterableToList( currEl.parentNode.children ).indexOf( currEl ) );
             currEl = currEl.parentNode;
         }
-        return path;
+        return path.join( "|" );
+    }
+
+    function followPathToElement( path ) {
+        path = path.split( "|" );
+        var el = document.getElementById( "mw-content-text" );
+        for( var i = path.length - 1; i >= 0; i-- ) {
+            el = el.children[parseInt(path[i])];
+        }
+        return el;
+    }
+
+    function highlightContainerOf( el ) {
+
+        // And then try to find the "container" element, and highlight that
+        outer:
+        while( true ) {
+            switch( el.tagName.toLowerCase() ) {
+                case "ul":
+                case "ol":
+                case "li":
+                case "dd":
+                case "dl":
+                case "p":
+                case "div":
+                case "table":
+                case "td":
+                    break outer;
+            }
+            el = el.parentNode;
+        }
+        el.className += "reply-link-jump-highlight";
     }
 
     /**
@@ -599,6 +632,16 @@ function loadReplyLink( $, mw ) {
         return sectionWikitext;
     }
 
+    function allContentHeaders() {
+        var allHeaders = document.querySelector( "#mw-content-text" )
+            .querySelectorAll( HEADER_SELECTOR );
+        return iterableToList( allHeaders )
+            .filter( function ( header ) {
+                // The word "Contents" at the top of the table of contents is a heading
+                return ( header.getAttribute( "id" ) !== "mw-toc-heading" );
+            } );
+    }
+
     /**
      * Given a header element, finds the title (full with namespace, spaces
      * instead of underscores) of the page it's from.
@@ -699,7 +742,7 @@ function loadReplyLink( $, mw ) {
      */
 	function findSectionInPageWikitext( givenHeaderEl, pageTitle, pageWikitext ) {
         var allHeaders = document.querySelector( "#mw-content-text" )
-            .querySelectorAll( "h1,h2,h3,h4,h5,h6" );
+            .querySelectorAll( HEADER_SELECTOR );
         var allHeadersFromTarget = iterableToList( allHeaders )
             .filter( function ( header ) {
                 // The word "Contents" at the top of the table of contents is a heading
@@ -1043,6 +1086,53 @@ function loadReplyLink( $, mw ) {
         return sectionWikitext;
     }
 
+    function performInPlaceReload( sigLinkElem, sectionObj ) {
+        return $.getJSON(
+            mw.util.wikiScript( "api" ),
+            {
+                format: "json",
+                action: "parse",
+                prop: "text",
+                section: sectionObj.idxInDomHeaders + 1,
+                page: sectionObj.pageTitle,
+                formatversion: 2,
+            }
+        ).then( function ( parseResult ) {
+            if( parseResult.parse.text ) {
+                var cmtLinkPath = getPathToElement( sigLinkElem );
+
+                // Delete all DOM elements in the current section
+                var nextHeaderEl = allContentHeaders()[sectionObj.idxInDomHeaders + 1];
+                var currEl = sectionObj.headerEl.nextElementSibling;
+                while( currEl && ( currEl !== nextHeaderEl ) ) {
+                    var nextEl = currEl.nextElementSibling;
+                    currEl.parentNode.removeChild( currEl );
+                    currEl = nextEl;
+                }
+
+                // Now write in the new stuff
+                var newHtml = new DOMParser().parseFromString( parseResult.parse.text, "text/html" );
+
+                // Select inside of .mw-parser-output
+                newHtml = newHtml.querySelector( ".mw-parser-output" );
+
+                // Remove initial header
+                newHtml.removeChild( newHtml.children[0] );
+
+                $( sectionObj.headerEl ).after( newHtml.children );
+                mw.hook( "wikipage.content" ).fire( $( newHtml.children ) );
+
+                delete getWikitextCache[sectionObj.pageTitle];
+
+                var newCmtLink = followPathToElement( cmtLinkPath );
+                highlightContainerOf( newCmtLink );
+            } else {
+                console.error( parseResult );
+                setStatus( "Failed to load in new version." );
+            }
+        } );
+    }
+
     /**
      * Using the text in #reply-dialog-field, add a reply to the current page.
      * rplyToXfdNom is true if we're replying to an XfD nom, in which case we
@@ -1209,8 +1299,6 @@ function loadReplyLink( $, mw ) {
                 var newWikitext = wikitext.replace( oldSectionWikitext, sectionWikitext );
                 editParams.text = newWikitext;
             }
-            console.log(editParams);
-            //throw new Error(1);
 
             // Send another request, this time to actually edit the page
             api.postWithEditToken( editParams ).done ( function ( data ) {
@@ -1220,7 +1308,7 @@ function loadReplyLink( $, mw ) {
                 // TODO goodness knows why I made this a property on the window object
                 window.replyLinkReload = function () {
                     window.location.hash = sectionId;
-                    var path = getPathToElement( cmtAuthorAndLink.link ).join( "|" );
+                    var path = getPathToElement( cmtAuthorAndLink.link );
                     document.cookie = JUMP_COOKIE_KEY + "=" + path;
                     window.location.reload( true );
                 };
@@ -1229,18 +1317,22 @@ function loadReplyLink( $, mw ) {
                     var needPurge = sectionObj.pageTitle !== currentPageName.replace( /_/g, " " );
 
                     function finishReply( _ ) {
-                        var reloadHtml = window.replyLinkAutoReload ? mw.msg( "rl-reloading" )
-                            : "<a href='javascript:window.replyLinkReload()' class='reply-link-reload'>" + mw.msg( "rl-reload" ) + "</a>";
-                        setStatus( mw.msg( "rl-saved" ) + " (" + reloadHtml + ")" );
+                        if( canMakeSectionEdit && window.replyLinkLoadNewInPlace ) {
+                            performInPlaceReload( cmtAuthorAndLink.link, sectionObj );
+                        } else {
+                            var reloadHtml = window.replyLinkAutoReload ? mw.msg( "rl-reloading" )
+                                : "<a href='javascript:window.replyLinkReload()' class='reply-link-reload'>" + mw.msg( "rl-reload" ) + "</a>";
+                            setStatus( mw.msg( "rl-saved" ) + " (" + reloadHtml + ")" );
 
-                        // Required to permit reload to happen, checked in onbeforeunload
-                        replyWasSaved = true;
+                            // Required to permit reload to happen, checked in onbeforeunload
+                            replyWasSaved = true;
 
-                        if( window.replyLinkAutoReload ) {
-                            window.replyLinkReload();
+                            if( window.replyLinkAutoReload ) {
+                                window.replyLinkReload();
+                            }
+
+                            deferred.resolve();
                         }
-
-                        deferred.resolve();
                     }
 
                     if( needPurge ) {
@@ -1915,12 +2007,14 @@ function loadReplyLink( $, mw ) {
         defaultValue( "replyLinkTestMode",         false );
         defaultValue( "replyLinkTestInstantReply", false );
         defaultValue( "replyLinkAutoIndentation",  "checkbox" );
+        defaultValue( "replyLinkLoadNewInPlace",   true );
 
         // Insert "reply" links into DOM
         attachLinks();
 
         // If test mode is enabled, create a link for that
-        if( window.replyLinkTestMode ) {
+        if( window.replyLinkTestMode &&
+                document.getElementsByClassName( "reply-link-sig-check-container" ).length === 0 ) {
             mw.util.addPortletLink( "p-cactions", "#", "reply-link test mode", "pt-reply-link-test" )
                 .addEventListener( "click", runTestMode );
 
@@ -1928,7 +2022,7 @@ function loadReplyLink( $, mw ) {
             $( "#mw-content-text" ).find( "h1,h2,h3,h4,h5,h6" ).each( function ( idx, header ) {
                 $( header ).find( ".mw-editsection *" ).last().before(
                     "<span style='color: #54595d'> | </span>",
-                    $( "<span>" ).append(
+                    $( "<span>", { "class": "reply-link-sig-check-container" } ).append(
                         $( "<a>" )
                             .attr( "href", "#" )
                             .text( "sig check" )
@@ -1959,6 +2053,9 @@ function loadReplyLink( $, mw ) {
             }
         }
 
+        // Jump CSS
+        mw.loader.addStyleTag( "@keyframes reply-link-jump-highlight-keyframes { from { background-color: #ffb; } to { background-color: transparent; } } .reply-link-jump-highlight { animation: reply-link-jump-highlight-keyframes  2s; }" );
+
         // Timeout to give other scripts time to load
         setTimeout( function () {
 
@@ -1966,33 +2063,10 @@ function loadReplyLink( $, mw ) {
             var jumpCookieIdx = document.cookie.indexOf( JUMP_COOKIE_KEY );
             if( jumpCookieIdx >= 0 ) {
                 try {
-                    var path = new RegExp( JUMP_COOKIE_KEY + "=([^;]+)" ).exec( document.cookie )[1].split( "|" );
-                    var el = document.getElementById( "mw-content-text" );
-                    for( var i = path.length - 1; i >= 0; i-- ) {
-                        el = el.children[parseInt(path[i])];
-                    }
+                    var path = new RegExp( JUMP_COOKIE_KEY + "=([^;]+)" ).exec( document.cookie )[1];
+                    var el = followPathToElement( path );
                     el.scrollIntoView();
-
-                    // And then try to find the "container" element, and highlight that
-                    outer:
-                    while( true ) {
-                        switch( el.tagName.toLowerCase() ) {
-                            case "ul":
-                            case "ol":
-                            case "li":
-                            case "dd":
-                            case "dl":
-                            case "p":
-                            case "span":
-                            case "div":
-                            case "table":
-                            case "td":
-                                break outer;
-                        }
-                        el = el.parentNode;
-                    }
-                    el.className += "reply-link-jump-highlight";
-                    mw.loader.addStyleTag( "@keyframes reply-link-jump-highlight-keyframes { from { background-color: #ffb; } to { background-color: transparent; } } .reply-link-jump-highlight { animation: reply-link-jump-highlight-keyframes  2s; }" );
+                    highlightContainerOf( el );
                 } catch( e ) { console.error(e); }
                 document.cookie = JUMP_COOKIE_KEY + "=; expires=Thu, 01 Jan 1970 00:00:01 GMT";
             }
