@@ -1,6 +1,6 @@
 // vim: ts=4 sw=4 et
 //<nowiki>
-function loadReplyLink( $, mw ) {
+function loadReplyLink( $, mw, isOnSectionWatchlistPage ) {
     var TIMESTAMP_REGEX = /\(UTC(?:(?:−|\+)\d+?(?:\.\d+)?)?\)\S*?\s*$/m;
     var EDIT_REQ_REGEX = /^((Semi|Template|Extended-confirmed)-p|P)rotected edit request on \d\d? \w+ \d{4}/;
     var EDIT_REQ_TPL_REGEX = /\{\{edit (template|fully|extended|semi)-protected\s*(\|.+?)*\}\}/;
@@ -70,6 +70,7 @@ function loadReplyLink( $, mw ) {
         "//test.wikipedia.org": /\d\d:\d\d,\s\d{1,2}\s\w+?\s\d{4}/.source,
         "//simple.wikipedia.org": /\d\d:\d\d,\s\d{1,2}\s\w+?\s\d{4}/.source,
         "//en.wikisource.org": /\d\d:\d\d,\s\d{1,2}\s\w+?\s\d{4}/.source,
+        "//meta.wikimedia.org": /\d\d:\d\d,\s\d{1,2}\s\w+?\s\d{4}/.source,
         "//pt.wikipedia.org": /\d\dh\d\dmin\sde \d{1,2} de \w+? de \d{4}/.source,
         "//commons.wikimedia.org": /\d\d:\d\d,\s\d{1,2}\s\w+?\s\d{4}/.source
     }
@@ -414,8 +415,6 @@ function loadReplyLink( $, mw ) {
     }
 
     function highlightContainerOf( el ) {
-
-        // And then try to find the "container" element, and highlight that
         outer:
         while( true ) {
             switch( el.tagName.toLowerCase() ) {
@@ -433,6 +432,24 @@ function loadReplyLink( $, mw ) {
             el = el.parentNode;
         }
         el.className += "reply-link-jump-highlight";
+    }
+
+    function getTimestampGivenAuthorLink( authorLink ) {
+        var currNode = authorLink;
+        while( !currNode.textContent.includes( "(UTC)" ) ) {
+            if( currNode.nextSibling ) {
+                currNode = currNode.nextSibling;
+            } else {
+                currNode = currNode.parentNode;
+            }
+        }
+        if( currNode.textContent.includes( "(UTC)" ) ) {
+            var matches = currNode.textContent.match( new RegExp( DATE_FMT_RGX[mw.config.get( "wgServer" )], "g" ) );
+            if( matches.length > 0 ) {
+                return matches[ matches.length - 1 ];
+            }
+        }
+        return null;
     }
 
     /**
@@ -680,6 +697,8 @@ function loadReplyLink( $, mw ) {
                 case "dd":
                 case "dl":
                 case "a":
+                case "i":
+                case "code":
                     // Headers aren't in these elements (and it would be a waste to check)
                     break;
                 case "h1":
@@ -1142,7 +1161,7 @@ function loadReplyLink( $, mw ) {
      *
      * Returns a Deferred that resolves/rejects when the reply succeeds/fails.
      */
-    function doReply( indentation, sigIdx, cmtAuthorAndLink, rplyToXfdNom, sectionObj, canMakeSectionEdit ) {
+    function doReply( parentCmtObj, cmtAuthorAndLink, rplyToXfdNom, sectionObj, canMakeSectionEdit ) {
         var deferred = $.Deferred();
 
         var revObj = sectionObj.revObj;
@@ -1172,9 +1191,9 @@ function loadReplyLink( $, mw ) {
                 // one character of indentation.
                 var outdentCheckbox = document.getElementById( "reply-link-option-outdent" );
                 if( outdentCheckbox && outdentCheckbox.checked ) {
-                    replyLines[0] = "{" + "{od|" + indentation.slice( 0, -1 ) +
+                    replyLines[0] = "{" + "{od|" + parentCmtObj.indentation.slice( 0, -1 ) +
                         "}}" + replyLines[0];
-                    indentation = "";
+                    parentCmtObj.indentation = "";
                 }
 
                 // Compose reply by adding indentation at the beginning of
@@ -1187,14 +1206,14 @@ function loadReplyLink( $, mw ) {
                     // use pb's, even though the markup'll probably be broken
                     if( replyLines.some( function ( l ) { return l.substr( 0, 1 ) === "*"; } ) ) {
                         fullReply = replyLines.map( function ( line ) {
-                            return indentation + "*" + line;
+                            return parentCmtObj.indentation + "*" + line;
                         } ).join( "\n" );
                     } else {
-                        fullReply = indentation + "* " + replyLines.join( "{{pb}}" );
+                        fullReply = parentCmtObj.indentation + "* " + replyLines.join( "{{pb}}" );
                     }
                 } else {
                     fullReply = replyLines.map( function ( line ) {
-                        return indentation + ":" + line;
+                        return parentCmtObj.indentation + ":" + line;
                     } ).join( "\n" );
                 }
             } else {
@@ -1206,7 +1225,8 @@ function loadReplyLink( $, mw ) {
             var oldSectionWikitext = sectionWikitext; // We'll String.replace old w/ new
 
             // Now, obtain the index of the end of the comment
-            var strIdx = sigIdxToStrIdx( sectionWikitext, sigIdx );
+            var strIdx = parentCmtObj.endStrIdx || sigIdxToStrIdx( sectionWikitext, parentCmtObj.sigIdx );
+            //console.log(">"+sectionWikitext.substring(strIdx)+"<");
 
             // Check for a non-negative strIdx
             if( strIdx < 0 ) {
@@ -1233,20 +1253,31 @@ function loadReplyLink( $, mw ) {
             cmtAuthorWktxt = sanitizeUsername( cmtAuthorWktxt );
             var cmtAuthorDom = sanitizeUsername( cmtAuthorAndLink.username );
 
-            // Do a sanity check: is the sig username the same as the
-            // DOM one?  We attempt to check sigRedirectMapping in case
-            // the naive check fails
+            // Is the sig username the same as the DOM one?  We attempt to check
+            // sigRedirectMapping in case the naive check fails
             if( cmtAuthorWktxt !== cmtAuthorDom &&
                     processCharEntitiesWikitext( cmtAuthorWktxt ) !== cmtAuthorDom &&
                     sigRedirectMapping[ cmtAuthorWktxt ] !== cmtAuthorDom ) {
-                throw new Error( "Sanity check on sig username failed! Found " +
+                throw new Error( "Sig username assert failed! Found " +
                     cmtAuthorWktxt + " but expected " + cmtAuthorDom +
                     " (wikitext vs DOM)" );
             }
 
+            // Another check: timestamp
+            var htmlTimestamp = getTimestampGivenAuthorLink( cmtAuthorAndLink.link );
+            var textTimestampMatches = sectionWikitext.slice( 0, strIdx ).match( new RegExp( DATE_FMT_RGX[mw.config.get( "wgServer" )], "g" ) );
+            if( textTimestampMatches.length > 0 ) {
+                var textTimestamp = textTimestampMatches[ textTimestampMatches.length - 1 ];
+                if( htmlTimestamp !== textTimestamp ) {
+                    throw new Error( "Timestamp assert failed! HTML had '" + htmlTimestamp + "' but wikitext had '" + textTimestamp + "'" );
+                }
+            } else {
+                console.warn( "textTimestampMatches was empty" );
+            }
+
             // Actually insert our reply into the section wikitext
             sectionWikitext = insertTextAfterIdx( sectionWikitext, strIdx,
-                    indentation.length, fullReply );
+                    parentCmtObj.indentation.length, fullReply );
 
             // Also, if the user wanted the edit request to be answered, do that
             var editReqCheckbox = document.getElementById( "reply-link-option-edit-req" );
@@ -1278,7 +1309,7 @@ function loadReplyLink( $, mw ) {
             if( window.replyLinkCustomSummary && customSummaryField.value ) {
                 summaryCore = customSummaryField.value.trim();
             }
-            var sectionId = sectionObj.headerEl.querySelector( "span.mw-headline" ).id;
+            var sectionId = sectionObj.headerEl ? sectionObj.headerEl.querySelector( "span.mw-headline" ).id : sectionObj.title;
             var summary = "/* " + sectionId.replace( /_/g, " " ) + " */ " + summaryCore + mw.msg( "rl-advert" );
 
             var editParams = {
@@ -1288,7 +1319,7 @@ function loadReplyLink( $, mw ) {
                 basetimestamp: revObj.timestamp,
             };
 
-            if( canMakeSectionEdit ) {
+            if( canMakeSectionEdit && ( sectionObj.idxInDomHeaders !== null ) ) {
                 editParams.section = sectionObj.idxInDomHeaders + 1;
                 if( sectionWikitext.startsWith( oldSectionWikitext ) ) {
                     editParams.appendtext = "\n" + sectionWikitext.substring( oldSectionWikitext.length ).trim();
@@ -1374,6 +1405,10 @@ function loadReplyLink( $, mw ) {
     function checkCanMakeSectionEdit( sectionObj ) {
         var fullWikitext = sectionObj.revObj.content;
 
+        if( sectionObj.idxInDomHeaders === null ) {
+            return $.when( false );
+        }
+
         // First, check if includeonly and noinclude are gonna ruin our day, by
         // seeing if there are any section headers inside includeonly and
         // noinclude elements.
@@ -1416,7 +1451,7 @@ function loadReplyLink( $, mw ) {
         } );
     }
 
-    function handleWrapperClick( linkLabel, parent, rplyToXfdNom ) {
+    function handleWrapperClick( linkLabel, parent, rplyToXfdNom, parentCmtObj, sectionObj ) {
         return function ( evt ) {
             $.when( mw.messages.exists( INT_MSG_KEYS[0] ) ? 1 :
                     api.loadMessages( INT_MSG_KEYS ) ).then( function () {
@@ -1507,8 +1542,9 @@ function loadReplyLink( $, mw ) {
                     document.getElementById( "reply-link-options" ).appendChild( newLabel );
                 }
 
-                // Fetch metadata about this specific comment
-                var ourMetadata = metadata[this.id];
+                if( parentCmtObj.sigIdx === null && parentCmtObj.endStrIdx === null ) {
+                    parentCmtObj.sigIdx = metadata[this.id].sigIdx;
+                }
 
                 // If the dry-run option is "checkbox", add an option to make it
                 // a dry run
@@ -1524,7 +1560,7 @@ function loadReplyLink( $, mw ) {
 
                 // If the previous comment was indented by OUTDENT_THRESH,
                 // offer to outdent
-                if( ourMetadata.indentation.length >= OUTDENT_THRESH ) {
+                if( parentCmtObj.indentation.length >= OUTDENT_THRESH ) {
                     newOption( "reply-link-option-outdent", "Outdent?", false );
                 }
 
@@ -1560,7 +1596,7 @@ function loadReplyLink( $, mw ) {
 
                 // Start loading in the section object, so we don't have to do it in startReply
                 try {
-                    var sectionObjPromise = findSectionMain( cmtLink );
+                    var sectionObjPromise = ( sectionObj === null ) ? findSectionMain( cmtLink ) : $.when( sectionObj );
                 } catch ( e ) {
                     console.error( e );
                     setStatus( "Error locating the section: " + e );
@@ -1594,8 +1630,7 @@ function loadReplyLink( $, mw ) {
                             setStatus( mw.msg( "rl-out-of-date" ) );
                         } else {
                             doReply(
-                                ourMetadata.indentation,
-                                ourMetadata.sigIdx,
+                                parentCmtObj,
                                 cmtAuthorAndLink,
                                 rplyToXfdNom,
                                 sectionObj,
@@ -1632,18 +1667,21 @@ function loadReplyLink( $, mw ) {
                         }
 
                         var sanitizedCode = encodeURIComponent( reply );
-                        $.post( "https:" + mw.config.get( "wgServer" ) +
-                            "/w/api.php?action=parse&format=json&title=" + currentPageName + "&text=" + sanitizedCode
-                                + "&pst=1",
-                            function ( res ) {
-                                if ( !res || !res.parse || !res.parse.text ) return console.error( "Preview failed" );
-                                document.getElementById( "reply-link-preview" ).innerHTML = res.parse.text['*'];
-                                // Add target="_blank" to links to make them open in a new tab by default
-                                var links = document.querySelectorAll( "#reply-link-preview a" );
-                                for( var i = 0, n = links.length; i < n; i++ ) {
-                                    links[i].setAttribute( "target", "_blank" );
-                                }
-                            } );
+                        sectionObjPromise.then( function ( sectionObj ) {
+                            $.post( "https:" + mw.config.get( "wgServer" ) +
+                                "/w/api.php?action=parse&format=json&title=" +
+                                    encodeURIComponent( sectionObj.pageTitle ) + "&text=" + sanitizedCode +
+                                    "&pst=1&prop=text&formatversion=2",
+                                function ( res ) {
+                                    if ( !res || !res.parse || !res.parse.text ) return console.error( "Preview failed" );
+                                    document.getElementById( "reply-link-preview" ).innerHTML = res.parse.text;
+                                    // Add target="_blank" to links to make them open in a new tab by default
+                                    var links = document.querySelectorAll( "#reply-link-preview a" );
+                                    for( var i = 0, n = links.length; i < n; i++ ) {
+                                        links[i].setAttribute( "target", "_blank" );
+                                    }
+                                } );
+                        } );
                     } );
 
                 if( window.replyLinkPreloadPing === "button" ) {
@@ -1692,7 +1730,7 @@ function loadReplyLink( $, mw ) {
      * the provided element id. anyIndentation is true if there's any
      * indentation (i.e. indentation string is not the empty string)
      */
-    function attachLinkAfterNode( node, preferredId, anyIndentation ) {
+    function attachLinkAfterNode( node, preferredId, parentCmtObj, sectionObj ) {
 
         // Choose a parent node - walk up tree until we're under a dd, li,
         // p, or div. This walk is a bit unsafe, but this function should
@@ -1706,8 +1744,8 @@ function loadReplyLink( $, mw ) {
         var rplyToXfdNom = false;
         if( xfdType === "AfD" || xfdType === "MfD" ) {
 
-            // If the comment is non-indented, we are replying to a nom
-            rplyToXfdNom = !anyIndentation;
+            // If the parent comment is non-indented, we are replying to a nom
+            rplyToXfdNom = !parentCmtObj.sigIdx;
         } else if( xfdType === "TfD" || xfdType === "FfD" ) {
 
             // If the sibling before the previous sibling of this node
@@ -1736,7 +1774,7 @@ function loadReplyLink( $, mw ) {
         newLink.id = preferredId;
         newLink.dataset.originalLabel = linkLabel;
         newLink.appendChild( document.createTextNode( linkLabel ) );
-        newLink.addEventListener( "click", handleWrapperClick( linkLabel, parent, rplyToXfdNom ) );
+        newLink.addEventListener( "click", handleWrapperClick( linkLabel, parent, rplyToXfdNom, parentCmtObj, sectionObj ) );
         newLinkWrapper.appendChild( document.createTextNode( " (" ) );
         newLinkWrapper.appendChild( newLink );
         newLinkWrapper.appendChild( document.createTextNode( ")" ) );
@@ -1826,12 +1864,17 @@ function loadReplyLink( $, mw ) {
                         ( node.previousSibling || isSmall ) &&
                         !hasLinkAfterwardsNotInBlockEl ) {
                     linkId = "reply-link-" + idNum;
-                    attachLinkAfterNode( node, linkId, !!currIndentation );
+                    var parentCmtObj = {
+                        indentation: currIndentation,
+                        sigIdx: null,
+                        endStrIdx: null
+                    };
+                    attachLinkAfterNode( node, linkId, parentCmtObj, /* sectionObj */ null );
                     idNum++;
 
                     // Update global metadata dictionary
                     metadata[linkId] = {};
-                    metadata[linkId].indentation = currIndentation;
+                    //metadata[linkId].indentation = currIndentation; // It's already being passed into attachLinkAfterNode
                 }
             } else if( node.nodeType === 1 &&
                     /^(div|p|dl|dd|ul|li|span|ol|table|tbody|tr|td)$/.test( node.tagName.toLowerCase() ) ) {
@@ -1974,6 +2017,7 @@ function loadReplyLink( $, mw ) {
               "max-width: 1200px; width: 66%; margin-top: 0.5em; }"+
             ".gone-on-empty:empty { display: none; }"
         );
+        mw.loader.load( "https://en.wikipedia.org/w/index.php?title=User:Enterprisey/mw-ui-button.css&action=raw&ctype=text/css", "text/css" );
 
         // Pre-load interface messages; we will check again when a (reply)
         // link is clicked
@@ -1999,7 +2043,7 @@ function loadReplyLink( $, mw ) {
 
         // Default values for some preferences
         function defaultValue( prefName, defaultValue ) { if( window[prefName] === undefined ) window[prefName] = defaultValue; }
-        defaultValue( "replyLinkAutoReload",       true );
+        defaultValue( "replyLinkAutoReload",       !isOnSectionWatchlistPage );
         defaultValue( "replyLinkDryRun",           "never" );
         defaultValue( "replyLinkPreloadPing",      "always" );
         defaultValue( "replyLinkPreloadPingTpl",   "{{u|##}}, " );
@@ -2010,7 +2054,9 @@ function loadReplyLink( $, mw ) {
         defaultValue( "replyLinkLoadNewInPlace",   true );
 
         // Insert "reply" links into DOM
-        attachLinks();
+        if( !isOnSectionWatchlistPage ) {
+            attachLinks();
+        }
 
         // If test mode is enabled, create a link for that
         if( window.replyLinkTestMode &&
@@ -2076,6 +2122,9 @@ function loadReplyLink( $, mw ) {
     mw.loader.load( "mediawiki.ui.input", "text/css" );
     mw.loader.using( [ "mediawiki.util", "mediawiki.api" ] ).then( function () {
         mw.hook( "wikipage.content" ).add( onReady );
+        if( isOnSectionWatchlistPage ) {
+            mw.hook( "replylink.attachlinkafter" ).add( attachLinkAfterNode );
+        }
     } );
 
     // Return functions for testing
@@ -2103,8 +2152,12 @@ if( jQuery !== undefined && mediaWiki !== undefined ) {
     var normalView = mw.config.get( "wgIsArticle" ) &&
             !mw.config.get( "wgDiffOldId" );
 
-    if ( normalView && ( currNamespace % 2 === 1 || currNamespace === 4 || ttdykPage ) ) {
+    if( normalView && ( currNamespace % 2 === 1 || currNamespace === 4 || ttdykPage ) ) {
         loadReplyLink( jQuery, mediaWiki );
+    }
+
+    if( currNamespace === -1 && ( mw.config.get( "wgTitle" ) === "BlankPage/section-watchlist" ) ) {
+        loadReplyLink( jQuery, mediaWiki, /* section-watchlist */ true );
     }
 }
 //</nowiki>
