@@ -436,7 +436,8 @@ function loadReplyLink( $, mw, isOnSectionWatchlistPage ) {
 
     function getTimestampGivenAuthorLink( authorLink ) {
         var currNode = authorLink;
-        while( !currNode.textContent.includes( "(UTC)" ) ) {
+        // The .localcomments element check is for compatibilty with the [[WP:Comments in Local Time]] gadget
+        while( !currNode.textContent.includes( "(UTC)" ) && ( currNode.className !== "localcomments" ) ) {
             if( currNode.nextSibling ) {
                 currNode = currNode.nextSibling;
             } else {
@@ -445,6 +446,11 @@ function loadReplyLink( $, mw, isOnSectionWatchlistPage ) {
         }
         if( currNode.textContent.includes( "(UTC)" ) ) {
             var matches = currNode.textContent.match( new RegExp( DATE_FMT_RGX[mw.config.get( "wgServer" )], "g" ) );
+            if( matches.length > 0 ) {
+                return matches[ matches.length - 1 ];
+            }
+        } else if( currNode.className === "localcomments" ) {
+            var matches = currNode.getAttribute( "title" ).match( new RegExp( DATE_FMT_RGX[mw.config.get( "wgServer" )], "g" ) );
             if( matches.length > 0 ) {
                 return matches[ matches.length - 1 ];
             }
