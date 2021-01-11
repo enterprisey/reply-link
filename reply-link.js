@@ -51,7 +51,7 @@ function loadReplyLink( $, mw, isOnSectionWatchlistPage ) {
     };
     var HEADER_SELECTOR = "h1,h2,h3,h4,h5,h6";
     var MAX_UNICODE_DECIMAL = 1114111;
-    var HEADER_REGEX = /^\s*=(=*)\s*(.+?)\s*\1=\s*$/gm;
+    var HEADER_REGEX = /^\s*=(=*)\s*(.+?)\s*\1=\s*(?:<!--.+?-->\s*)?$/gm;
     var JUMP_COOKIE_KEY = "reply_link_jump";
 
     // T:TDYK, used at the end of loadReplyLink
