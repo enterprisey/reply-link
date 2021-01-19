@@ -904,12 +904,13 @@ function loadReplyLink( $, mw, isOnSectionWatchlistPage ) {
     }
 
     /**
-     * Converts a signature index to a string index into the given
-     * section wikitext. For example, if sigIdx is 1, then this function
-     * will return the index in sectionWikitext pointing to right
-     * after the second signature appearing in sectionWikitext.
+     * Converts a (zero-based) signature index to a pair of string indices into
+     * the given section wikitext, indicating the start and the end of the
+     * requested signature. The return value is an object with two properties,
+     * "start" for the starting index and "end" for the ending index (i.e. the
+     * index of the first character after the signature).
      *
-     * Returns -1 if we couldn't find anything.
+     * Returns null if we couldn't find anything.
      */
     function sigIdxToStrIdx( sectionWikitext, sigIdx ) {
         //console.log( "In sigIdxToStrIdx, sigIdx = " + sigIdx );
@@ -977,7 +978,7 @@ function loadReplyLink( $, mw, isOnSectionWatchlistPage ) {
             match = sigRgx.exec( sectionWikitext );
             if( !match ) {
                 console.error("[sigIdxToStrIdx] out of matches, matchIdx was",matchIdx,"sigIdx was",sigIdx);
-                return -1;
+                return null;
             }
             //console.log( "sig match (matchIdx = " + matchIdx + ") is >" + match[0] + "< (index = " + match.index + ")" );
 
@@ -1002,7 +1003,10 @@ function loadReplyLink( $, mw, isOnSectionWatchlistPage ) {
             }
 
             if( matchIdx === sigIdx ) {
-                return match.index + match[0].length;
+                return {
+                    start: match.index,
+                    end: match.index + match[0].length,
+                };
             }
         }
     }
@@ -1231,18 +1235,25 @@ function loadReplyLink( $, mw, isOnSectionWatchlistPage ) {
             var oldSectionWikitext = sectionWikitext; // We'll String.replace old w/ new
 
             // Now, obtain the index of the end of the comment
-            var strIdx = parentCmtObj.endStrIdx || sigIdxToStrIdx( sectionWikitext, parentCmtObj.sigIdx );
-            //console.log(">"+sectionWikitext.substring(strIdx)+"<");
+            var sigStartStrIdx = null;
+            var sigEndStrIdx = null;
+            if( !parentCmtObj.endStrIdx ) {
+                var strIndices = sigIdxToStrIdx( sectionWikitext, parentCmtObj.sigIdx );
+                sigStartStrIdx = strIndices && strIndices.start;
+                sigEndStrIdx = strIndices && strIndices.end;
+            } else {
+                sigEndStrIdx = parentCmtObj.endStrIdx;
+            }
 
-            // Check for a non-negative strIdx
-            if( strIdx < 0 ) {
-                throw( "Negative strIdx (signature not found in wikitext)" );
+            // Check for a valid sigEndStrIdx
+            if( sigEndStrIdx === null ) {
+                throw( "Null sigEndStrIdx (signature not found in wikitext)" );
             }
 
             // Determine the user who wrote the comment, for
             // edit-summary and sanity-check purposes
             var userRgx = new RegExp( /\[\[\s*(?:m:)?:?\s*/.source + userspcLinkRgx.both + /\s*(.+?)(?:\/.+?)?(?:#.+?)?\s*(?:\|.+?)?\]\]/.source, "ig" );
-            var userMatches = processCharEntitiesWikitext( sectionWikitext.slice( 0, strIdx ) ).match( userRgx );
+            var userMatches = processCharEntitiesWikitext( sectionWikitext.slice( sigStartStrIdx || 0, sigEndStrIdx ) ).match( userRgx );
             var cmtAuthorWktxt = userRgx.exec( userMatches[userMatches.length - 1] )[1];
 
             if( cmtAuthorWktxt === "DoNotArchiveUntil" ) {
@@ -1271,7 +1282,7 @@ function loadReplyLink( $, mw, isOnSectionWatchlistPage ) {
 
             // Another check: timestamp
             var htmlTimestamp = getTimestampGivenAuthorLink( cmtAuthorAndLink.link );
-            var textTimestampMatches = sectionWikitext.slice( 0, strIdx ).match( new RegExp( DATE_FMT_RGX[mw.config.get( "wgServer" )], "g" ) );
+            var textTimestampMatches = sectionWikitext.slice( sigStartStrIdx || 0, sigEndStrIdx ).match( new RegExp( DATE_FMT_RGX[mw.config.get( "wgServer" )], "g" ) );
             if( textTimestampMatches.length > 0 ) {
                 var textTimestamp = textTimestampMatches[ textTimestampMatches.length - 1 ];
                 if( htmlTimestamp !== textTimestamp ) {
@@ -1282,7 +1293,7 @@ function loadReplyLink( $, mw, isOnSectionWatchlistPage ) {
             }
 
             // Actually insert our reply into the section wikitext
-            sectionWikitext = insertTextAfterIdx( sectionWikitext, strIdx,
+            sectionWikitext = insertTextAfterIdx( sectionWikitext, sigEndStrIdx,
                     parentCmtObj.indentation.length, fullReply );
 
             // Also, if the user wanted the edit request to be answered, do that
