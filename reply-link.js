@@ -966,8 +966,8 @@ function loadReplyLink( $, mw, isOnSectionWatchlistPage ) {
          * It's also localized.
          */
         var sigRgxSrc = "(?:" + /\[\[\s*(?:m:)?:?\s*/.source + "(" + userspcLinkRgx.both +
-                /([^\]]|\](?!\]))*?/.source + ")" + /\]\]\)?/.source + "(" +
-                /[^\[]|\[(?!\[)|\[\[/.source + "(?!" + userspcLinkRgx.both +
+                /([^\]\n]|\](?!\]))*?/.source + ")" + /\]\]\)?/.source + "(" +
+                /[^\[\n]|\[(?!\[)|\[\[/.source + "(?!" + userspcLinkRgx.both +
                 "))*?" + DATE_FMT_RGX[mw.config.get( "wgServer" )] +
                 /\s+\(UTC\)|class\s*=\s*"autosigned".+?\(UTC\)<\/small>/.source +
                 ")" + /(\S*([ \t\f]|<!--.*?-->)*(?:\{\{.+?\}\})?(?!\S)|\s?\S+([ \t\f]|<!--.*?-->)*)$/.source;
