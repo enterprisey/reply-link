@@ -2084,7 +2084,7 @@ function loadReplyLink( $, mw, isOnSectionWatchlistPage ) {
                 .addEventListener( "click", runTestMode );
 
             // Also add "sig check" links to each section header
-            $( "#mw-content-text" ).find( "h1,h2,h3,h4,h5,h6" ).each( function ( idx, header ) {
+            $( "#mw-content-text" ).find( HEADER_SELECTOR ).each( function ( idx, header ) {
                 $( header ).find( ".mw-editsection *" ).last().before(
                     "<span style='color: #54595d'> | </span>",
                     $( "<span>", { "class": "reply-link-sig-check-container" } ).append(
@@ -2092,8 +2092,17 @@ function loadReplyLink( $, mw, isOnSectionWatchlistPage ) {
                             .attr( "href", "#" )
                             .text( "sig check" )
                             .click( function () {
-                                //var sigEls = 
-                                //var sigMatches;
+                                buildUserspcLinkRgx();
+                                var sigEls = $( header ).nextUntil( HEADER_SELECTOR ).find( '.reply-link-wrapper' ).toArray();
+                                findSectionMain( sigEls[0] ).then( function ( sectionObj ) {
+                                    var sectionWikitext = sectionObj.revObj.content.substring( sectionObj.startIdx, sectionObj.endIdx );
+                                    for( var sigIdx = 0; sigIdx < sigEls.length; sigIdx++ ) {
+                                        var strIndices = sigIdxToStrIdx( sectionWikitext, sigIdx );
+                                        var sigText = sectionWikitext.substring( strIndices.start, strIndices.end );
+                                        $( sigEls[sigIdx] ).last().before( " ", $( "<abbr>", { title: sigText } ).text( sigText.substring( sigText.length - 50 ) ) );
+                                    }
+                                } );
+                                return false;
                             } ) ) );
             } );
         }
