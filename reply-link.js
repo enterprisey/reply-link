@@ -463,6 +463,10 @@ function loadReplyLink( $, mw, isOnSectionWatchlistPage ) {
      * runner at the bottom.
      */
     function buildUserspcLinkRgx() {
+        if( userspcLinkRgx ) {
+            return;
+        }
+
         var nsIdMap = mw.config.get( "wgNamespaceIds" );
         var nsRgxFragments = [];
         var contribsSecondFrag = ":" + escapeForRegex( mw.messages.get( "mycontris" ) ) + "\\/";
@@ -1475,9 +1479,7 @@ function loadReplyLink( $, mw, isOnSectionWatchlistPage ) {
                 var newLink = this;
                 var newLinkWrapper = this.parentNode;
 
-                if( !userspcLinkRgx ) {
-                    buildUserspcLinkRgx();
-                }
+                buildUserspcLinkRgx();
 
                 // Remove previous panel
                 var prevPanel = document.getElementById( "reply-link-panel" );
