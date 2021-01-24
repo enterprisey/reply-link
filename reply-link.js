@@ -2083,6 +2083,11 @@ function loadReplyLink( $, mw, isOnSectionWatchlistPage ) {
             mw.util.addPortletLink( "p-cactions", "#", "reply-link test mode", "pt-reply-link-test" )
                 .addEventListener( "click", runTestMode );
 
+            var dryRunToCheckboxLink = mw.util.addPortletLink( "p-cactions", "#",
+                    "reply-link: dry-run = checkbox", "pt-reply-link-dry-run-checkbox",
+                    "Set window.replyLinkDryRun to 'checkbox'" )
+                .addEventListener( "click", function () { window.replyLinkDryRun = "checkbox" } );
+
             // Also add "sig check" links to each section header
             $( "#mw-content-text" ).find( HEADER_SELECTOR ).each( function ( idx, header ) {
                 $( header ).find( ".mw-editsection *" ).last().before(
