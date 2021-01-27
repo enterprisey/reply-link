@@ -188,17 +188,6 @@ function loadReplyLink( $, mw, isOnSectionWatchlistPage ) {
     }
 
     /**
-     * Remove duplicates from an array.
-     * https://stackoverflow.com/a/9229821/1757964
-     */
-    function removeDuplicates( array ) {
-        var seen = {};
-        return array.filter( function( item ) {
-            return seen.hasOwnProperty( item ) ? false : ( seen[ item ] = true );
-        } );
-    }
-
-    /**
      * Capitalize the first letter of a string.
      */
     function capFirstLetter( someString ) {
@@ -211,13 +200,6 @@ function loadReplyLink( $, mw, isOnSectionWatchlistPage ) {
      */
     function nsNameToId( nsName ) {
         return mw.config.get( "wgNamespaceIds" )[ nsName.toLowerCase().replace( / /g, "_" ) ];
-    }
-
-    /**
-     * Canonical-ize a namespace.
-     */
-    function canonicalizeNs( ns ) {
-        return fmtNs( nsNameToId( ns ) );
     }
 
     /**
@@ -300,10 +282,6 @@ function loadReplyLink( $, mw, isOnSectionWatchlistPage ) {
             .replace( /<s>(.+?)<\/s>/g, "$1" )
             .replace( /<big>(.+?)<\/big>/g, "$1" )
             .replace( /<span.*?>(.*?)<\/span>/g, "$1" );
-    }
-
-    function wikitextHeaderEqualsDomHeader( wikitextHeader, domHeader ) {
-        return wikitextToTextContent( wikitextHeader ) === deArmorFrenchSpaces( domHeader );
     }
 
     /**
@@ -1938,9 +1916,7 @@ function loadReplyLink( $, mw, isOnSectionWatchlistPage ) {
         // This loop adds sigIdx entries in the metadata dictionary
         var sigIdxEls = iterableToList( mainContent.querySelectorAll(
                 HEADER_SELECTOR + ",span.reply-link-wrapper a" ) );
-        var currSigIdx = 0, j, numSigIdxEls, currHeaderEl, currHeaderData;
-        var headerIdx = 0; // index of the current header
-        var headerLvl = 0; // level of the current header
+        var currSigIdx = 0, j, numSigIdxEls, currHeaderEl;
         for( j = 0, numSigIdxEls = sigIdxEls.length; j < numSigIdxEls; j++ ) {
             var headerTagNameMatch = /^h(\d+)$/.exec(
                 sigIdxEls[j].tagName.toLowerCase() );
