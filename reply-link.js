@@ -947,6 +947,27 @@ function loadReplyLink( $, mw, isOnSectionWatchlistPage ) {
         } while( skipRegionMatch );
         //console.log(spanStartIndices,spanLengths);
 
+        // Also skip transclusions of {{tq}} and {{tq2}}. These transclusions
+        // have a high chance of containing other templates, so instead search
+        // for closing curly braces at the right nesting level with a counter.
+        var TQ_START_RE = /\{\{\s*tq2?/g;
+        var tqStartMatch;
+        while( ( tqStartMatch = TQ_START_RE.exec( sectionWikitext ) ) !== null ) {
+            var currentNestingLevel = 2; // two curly braces started the template
+            var wikitextIdx = tqStartMatch.index + tqStartMatch[0].length;
+            while( ( currentNestingLevel > 0 ) && ( wikitextIdx < sectionWikitext.length ) ) {
+                if( sectionWikitext.charAt( wikitextIdx ) === "{" ) {
+                    currentNestingLevel += 1;
+                } else if( sectionWikitext.charAt( wikitextIdx ) === "}" ) {
+                    currentNestingLevel -= 1;
+                }
+                wikitextIdx += 1;
+            }
+
+            spanStartIndices.push( tqStartMatch.index );
+            spanLengths.push( wikitextIdx - tqStartMatch.index );
+        }
+
         var dateFmtRgx = DATE_FMT_RGX[mw.config.get( "wgServer" )];
         if( !dateFmtRgx ) {
             throw new Error( "Error! I don't know the native date format used by the server '" + mw.config.get( "wgServer" ) + "'!" );
