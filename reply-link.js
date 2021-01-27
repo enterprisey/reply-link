@@ -933,19 +933,15 @@ function loadReplyLink( $, mw, isOnSectionWatchlistPage ) {
         var spanLengths = [];
         var DELSORT_SPAN_RE_TXT = /<small class="delsort-notice">(?:<small>.+?<\/small>|.)+?<\/small>/.source;
         var XFD_RELIST_RE_TXT = /<div class="xfd_relist"[\s\S]+?<\/div>(\s*|<!--.+?-->)*/.source;
-        var STRUCK_RE_TXT = /<s>.+?<\/s>/.source;
         var SKIP_REGION_RE = new RegExp("(" + DELSORT_SPAN_RE_TXT + ")|(" +
             XFD_RELIST_RE_TXT + ")|(" +
-            STRUCK_RE_TXT + ")", "ig");
+            /<s>.+?<\/s>/.source + ")", // struck regions (I don't care about nested ones)
+            "ig");
         var skipRegionMatch;
-        do {
-            skipRegionMatch = SKIP_REGION_RE.exec( sectionWikitext );
-            if( skipRegionMatch ) {
-                spanStartIndices.push( skipRegionMatch.index );
-                spanLengths.push( skipRegionMatch[0].length );
-            }
-        } while( skipRegionMatch );
-        //console.log(spanStartIndices,spanLengths);
+        while( ( skipRegionMatch = SKIP_REGION_RE.exec( sectionWikitext ) ) !== null ) {
+            spanStartIndices.push( skipRegionMatch.index );
+            spanLengths.push( skipRegionMatch[0].length );
+        }
 
         // Also skip transclusions of {{tq}} and {{tq2}}. These transclusions
         // have a high chance of containing other templates, so instead search
@@ -967,6 +963,7 @@ function loadReplyLink( $, mw, isOnSectionWatchlistPage ) {
             spanStartIndices.push( tqStartMatch.index );
             spanLengths.push( wikitextIdx - tqStartMatch.index );
         }
+        //console.log(spanStartIndices,spanLengths);
 
         var dateFmtRgx = DATE_FMT_RGX[mw.config.get( "wgServer" )];
         if( !dateFmtRgx ) {
