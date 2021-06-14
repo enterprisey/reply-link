@@ -1724,8 +1724,9 @@ function loadReplyLink( $, mw, isOnSectionWatchlistPage ) {
                 if( window.replyLinkPreloadPing === "button" ) {
                     document.getElementById( "reply-link-ping-button" )
                         .addEventListener( "click", function () {
+                            var cmtAuthorEscaped = cmtAuthor.replace( /=/g, "{{=}}" );
                             replyDialogField.value = window.replyLinkPreloadPingTpl
-                                .replace( "##", cmtAuthor ) + replyDialogField.value;
+                                .replace( "##", cmtAuthorEscaped ) + replyDialogField.value;
                         } );
                 }
 
