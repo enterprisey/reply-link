@@ -1560,6 +1560,7 @@ function loadReplyLink( $, mw, isOnSectionWatchlistPage ) {
                 if( window.replyLinkPreloadPing === "always" &&
                         cmtAuthor &&
                         cmtAuthor !== mw.config.get( "wgUserName" ) &&
+                        cmtAuthor !== mw.config.get( "wgRelevantUserName" ) &&
                         !/(\d+.){3}\d+/.test( cmtAuthor ) ) {
                     replyDialogField.value = window.replyLinkPreloadPingTpl.replace( "##", cmtAuthor );
                 }
